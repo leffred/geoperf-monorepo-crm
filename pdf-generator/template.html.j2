@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ report.title }} — Geoperf</title>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+Pro:wght@400;500;600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { font-family: 'Inter', -apple-system, sans-serif; color: #2C2C2A; line-height: 1.6; font-size: 10.5pt; }
+
+    @page { size: A4 portrait; margin: 22mm 18mm 24mm 18mm; }
+    @page :first { margin: 0; }
+
+    h1, h2, h3, h4, .serif { font-family: 'Source Serif Pro', 'Times New Roman', Georgia, serif; color: #042C53; font-weight: 500; letter-spacing: -0.3px; }
+    h1 { font-size: 32pt; line-height: 1.1; margin-bottom: 12mm; }
+    h2 { font-size: 20pt; line-height: 1.2; margin: 12mm 0 4mm; padding-bottom: 3mm; border-bottom: 0.5px solid #042C53; }
+    h3 { font-size: 14pt; line-height: 1.3; margin: 7mm 0 3mm; }
+    h4 { font-size: 11pt; line-height: 1.3; margin: 5mm 0 2mm; }
+    p { margin-bottom: 3mm; }
+    ul, ol { margin: 0 0 3mm 5mm; }
+    li { margin-bottom: 1.5mm; }
+    .mono { font-family: 'IBM Plex Mono', monospace; font-size: 9pt; }
+    .caps { letter-spacing: 2.5px; text-transform: uppercase; font-size: 9pt; color: #0C447C; font-weight: 500; }
+    .amber { color: #EF9F27; }
+    .navy-light { color: #0C447C; }
+    .small { font-size: 9pt; color: #5F5E5A; }
+    .subtle { color: #5F5E5A; font-size: 9.5pt; }
+
+    /* COVER */
+    .cover {
+      page-break-after: always;
+      width: 210mm; height: 297mm;
+      background: #042C53;
+      color: #FFFFFF;
+      padding: 28mm 24mm;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .cover .top, .cover .mid, .cover .bot { position: relative; z-index: 1; }
+    .cover .mid { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .cover .logo-mark {
+      width: 16mm; height: 16mm;
+      background: #FFFFFF; color: #042C53;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: 'Source Serif Pro', serif;
+      font-size: 28pt; font-weight: 500;
+      position: relative;
+    }
+    .cover .logo-mark::after {
+      content: ""; position: absolute; top: 2mm; right: 2mm;
+      width: 2.5mm; height: 2.5mm; background: #EF9F27; border-radius: 50%;
+    }
+    .cover .label { font-family: 'Inter', sans-serif; font-size: 10pt; letter-spacing: 4px; text-transform: uppercase; opacity: 0.75; margin-top: 6mm; }
+    .cover h1 { color: #FFFFFF; font-size: 44pt; line-height: 1.1; max-width: 150mm; }
+    .cover h1 .dot { color: #EF9F27; }
+    .cover .subtitle { font-family: 'Source Serif Pro', serif; font-size: 18pt; color: #FFFFFF; opacity: 0.85; margin-top: 8mm; max-width: 150mm; font-weight: 400; }
+    .cover .meta { display: flex; gap: 12mm; margin-top: 14mm; font-family: 'Inter', sans-serif; font-size: 11pt; }
+    .cover .meta div { border-left: 0.5px solid rgba(255,255,255,0.4); padding-left: 4mm; }
+    .cover .meta .lbl { font-size: 8pt; opacity: 0.6; letter-spacing: 1.5px; text-transform: uppercase; display: block; margin-bottom: 1mm; }
+    .cover .footer { display: flex; justify-content: space-between; align-items: flex-end; font-size: 9pt; opacity: 0.7; }
+    .cover .wordmark-bot { font-family: 'Source Serif Pro', serif; font-size: 18pt; letter-spacing: -0.6px; }
+
+    /* TABLE OF CONTENTS */
+    .toc {
+      background: #F1EFE8;
+      padding: 8mm 10mm;
+      margin: 6mm 0 10mm;
+      border-left: 3px solid #042C53;
+    }
+    .toc h3 { margin-top: 0; }
+    .toc ol { list-style: none; margin: 4mm 0 0; counter-reset: tocitem; }
+    .toc ol li {
+      counter-increment: tocitem;
+      display: flex; justify-content: space-between;
+      font-family: 'Source Serif Pro', serif;
+      font-size: 11.5pt;
+      padding: 1.5mm 0;
+      border-bottom: 0.5px dotted rgba(4,44,83,0.2);
+    }
+    .toc ol li::before {
+      content: counter(tocitem, decimal-leading-zero) " · ";
+      color: #EF9F27;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10pt;
+      margin-right: 4mm;
+    }
+    .toc ol li .pg { font-family: 'IBM Plex Mono', monospace; font-size: 10pt; color: #5F5E5A; }
+    .toc ol li .lbl { flex: 1; }
+
+    /* EXEC SUMMARY HIGHLIGHT */
+    .exec-block {
+      background: #F1EFE8;
+      border-left: 3px solid #EF9F27;
+      padding: 6mm 8mm;
+      margin: 6mm 0;
+      font-family: 'Source Serif Pro', serif;
+      font-size: 13pt;
+      line-height: 1.55;
+      color: #042C53;
+    }
+
+    /* KPI GRID */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4mm;
+      margin: 6mm 0;
+    }
+    .kpi-card {
+      background: #F1EFE8;
+      padding: 5mm;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    .kpi-card .num { font-family: 'Source Serif Pro', serif; font-size: 28pt; font-weight: 500; color: #042C53; line-height: 1; }
+    .kpi-card .lbl { font-size: 9pt; color: #5F5E5A; margin-top: 2mm; letter-spacing: 0.5px; }
+    .kpi-card.featured { background: #042C53; color: #FFFFFF; }
+    .kpi-card.featured .num { color: #FFFFFF; }
+    .kpi-card.featured .lbl { color: rgba(255,255,255,0.85); }
+
+    /* CHARTS */
+    .chart-section {
+      display: grid;
+      grid-template-columns: 90mm 1fr;
+      gap: 8mm;
+      margin: 6mm 0;
+      page-break-inside: avoid;
+    }
+    .chart-section.full { grid-template-columns: 1fr; }
+    .chart-svg { width: 100%; height: auto; max-height: 75mm; }
+    .chart-caption {
+      font-size: 9pt;
+      color: #5F5E5A;
+      text-align: center;
+      margin-top: 2mm;
+      font-style: italic;
+    }
+    .chart-text h4 { margin-top: 0; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4mm; margin-top: 3mm; font-size: 9pt; }
+    .legend-item { display: flex; align-items: center; gap: 1.5mm; }
+    .legend-swatch { width: 3mm; height: 3mm; border-radius: 0; display: inline-block; }
+
+    /* COMPANY CARD ENRICHIE */
+    .company-list { margin: 6mm 0; }
+    .company-card {
+      display: grid;
+      grid-template-columns: 14mm 1fr 38mm;
+      gap: 5mm;
+      padding: 5mm 0;
+      border-bottom: 0.5px solid rgba(4,44,83,0.15);
+      page-break-inside: avoid;
+    }
+    .company-card:last-child { border-bottom: none; }
+    .company-card .rank-block { text-align: center; }
+    .company-card .rank-block .rank-num {
+      font-family: 'Source Serif Pro', serif;
+      font-size: 28pt;
+      font-weight: 500;
+      color: #042C53;
+      line-height: 1;
+    }
+    .company-card .rank-block .country-flag {
+      font-size: 8pt;
+      color: #5F5E5A;
+      margin-top: 1mm;
+      letter-spacing: 0.5px;
+    }
+    .company-card .body .name {
+      font-family: 'Source Serif Pro', serif;
+      font-size: 14pt;
+      font-weight: 500;
+      color: #042C53;
+      margin-bottom: 1mm;
+    }
+    .company-card .body .domain {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9pt;
+      color: #0C447C;
+      margin-bottom: 2mm;
+    }
+    .company-card .body .one-liner {
+      font-size: 10pt;
+      color: #2C2C2A;
+      margin-bottom: 2mm;
+    }
+    .company-card .body .meta-row {
+      display: flex;
+      gap: 3mm;
+      font-size: 8.5pt;
+      color: #5F5E5A;
+      margin-bottom: 2mm;
+      flex-wrap: wrap;
+    }
+    .company-card .body .meta-row span { display: inline-flex; align-items: center; gap: 1mm; }
+    .company-card .body .meta-row span::before {
+      content: "·"; color: #EF9F27; font-weight: 700; margin-right: 1.5mm;
+    }
+    .company-card .body .meta-row span:first-child::before { content: ""; margin: 0; }
+    .company-card .body .notes { font-size: 9pt; color: #5F5E5A; font-style: italic; }
+    .company-card .visibility { text-align: right; font-size: 9pt; color: #0C447C; }
+    .company-card .visibility .pill {
+      display: inline-block;
+      background: #042C53;
+      color: #FFFFFF;
+      padding: 1.5mm 3.5mm;
+      border-radius: 0;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9pt;
+      letter-spacing: 0.5px;
+      margin-bottom: 2mm;
+      font-weight: 500;
+    }
+    .company-card .visibility .pill.score-1 { background: #888780; }
+    .company-card .visibility .pill.score-2 { background: #5F5E5A; }
+    .company-card .visibility .pill.score-3 { background: #0C447C; }
+    .company-card .visibility .pill.score-4 { background: #042C53; }
+    .company-card .visibility .llm-grid {
+      display: inline-grid;
+      grid-template-columns: repeat(4, 7mm);
+      gap: 1mm;
+      margin-top: 1mm;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 7pt;
+      text-align: center;
+    }
+    .company-card .visibility .llm-grid div {
+      padding: 1mm 0;
+      background: #F1EFE8;
+      color: #888780;
+      letter-spacing: 0.3px;
+    }
+    .company-card .visibility .llm-grid div.cited {
+      background: #042C53;
+      color: #FFFFFF;
+    }
+    .company-card .visibility .ai-note {
+      font-size: 8.5pt;
+      color: #5F5E5A;
+      margin-top: 2mm;
+      line-height: 1.4;
+    }
+
+    /* INSIGHTS */
+    .insight {
+      background: #FFFFFF;
+      border-left: 3px solid #EF9F27;
+      border-top: 0.5px solid #042C53;
+      border-right: 0.5px solid #042C53;
+      border-bottom: 0.5px solid #042C53;
+      padding: 6mm 7mm;
+      margin: 4mm 0;
+      page-break-inside: avoid;
+    }
+    .insight .title {
+      font-family: 'Source Serif Pro', serif;
+      font-size: 13pt;
+      font-weight: 500;
+      color: #042C53;
+      margin-bottom: 2mm;
+    }
+    .insight .body { font-size: 10.5pt; }
+
+    /* SOURCES TABLE */
+    .sources-table { width: 100%; border-collapse: collapse; margin: 4mm 0; font-size: 9pt; }
+    .sources-table th {
+      text-align: left;
+      padding: 2mm 3mm;
+      background: #042C53;
+      color: #FFFFFF;
+      font-family: 'Inter', sans-serif;
+      font-size: 9pt;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+    .sources-table td {
+      padding: 2mm 3mm;
+      border-bottom: 0.5px solid rgba(4,44,83,0.15);
+    }
+    .sources-table tr:nth-child(even) td { background: #F8F7F2; }
+    .sources-table .url {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 8pt;
+      color: #0C447C;
+      word-break: break-all;
+    }
+
+    /* GLOSSARY */
+    .glossary-item {
+      margin-bottom: 4mm;
+      page-break-inside: avoid;
+    }
+    .glossary-item .term {
+      font-family: 'Source Serif Pro', serif;
+      font-size: 12pt;
+      font-weight: 500;
+      color: #042C53;
+      margin-bottom: 1mm;
+    }
+    .glossary-item .definition { font-size: 10pt; color: #2C2C2A; }
+
+    /* FAQ */
+    .faq-item {
+      margin: 4mm 0;
+      padding: 4mm 0;
+      border-bottom: 0.5px solid rgba(4,44,83,0.15);
+      page-break-inside: avoid;
+    }
+    .faq-item .q {
+      font-family: 'Source Serif Pro', serif;
+      font-size: 12pt;
+      font-weight: 500;
+      color: #042C53;
+      margin-bottom: 2mm;
+    }
+    .faq-item .q::before {
+      content: "Q. "; color: #EF9F27; font-weight: 600;
+    }
+    .faq-item .a { font-size: 10.5pt; color: #2C2C2A; }
+    .faq-item .a::before { content: "A. "; color: #0C447C; font-weight: 600; }
+
+    /* ABOUT */
+    .about-box {
+      background: #042C53; color: #FFFFFF;
+      padding: 8mm 10mm;
+      margin: 12mm 0 8mm;
+    }
+    .about-box h3 { color: #FFFFFF; margin-top: 0; }
+    .about-box p { color: rgba(255,255,255,0.9); }
+
+    .legal-footer {
+      font-size: 8pt;
+      color: #888780;
+      text-align: center;
+      border-top: 0.5px solid rgba(4,44,83,0.2);
+      padding-top: 4mm;
+      margin-top: 8mm;
+    }
+
+    /* PAGE BREAKS */
+    .page-break { page-break-before: always; }
+    h2 { page-break-after: avoid; }
+    h3 { page-break-after: avoid; }
+  </style>
+</head>
+<body>
+
+  <!-- ============== COVER ============== -->
+  <section class="cover">
+    <div class="top">
+      <div class="logo-mark">G</div>
+      <div class="label">{{ report.serie_label or "LLM Visibility Research" }}</div>
+    </div>
+
+    <div class="mid">
+      <h1>{{ report.title }}<span class="dot">.</span></h1>
+      <div class="subtitle">{{ report.subtitle }}</div>
+
+      <div class="meta">
+        <div>
+          <span class="lbl">Période</span>
+          {{ report.period }}
+        </div>
+        <div>
+          <span class="lbl">LLM analysés</span>
+          {{ report.llms_count }} modèles
+        </div>
+        <div>
+          <span class="lbl">Sociétés étudiées</span>
+          {{ report.companies_count }}
+        </div>
+        <div>
+          <span class="lbl">Sources web</span>
+          {{ report.total_sources }}
+        </div>
+      </div>
+    </div>
+
+    <div class="bot">
+      <div class="footer">
+        <div>
+          <div class="wordmark-bot">Ge<span style="color:#EF9F27">·</span>perf</div>
+          <div style="font-size:8pt; opacity:0.7; letter-spacing:2px; margin-top:2mm;">G E O P E R F . C O M</div>
+        </div>
+        <div style="text-align:right;">
+          Édition {{ report.edition_label }}<br>
+          <span class="mono">{{ report.report_id_short }}</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== SOMMAIRE ============== -->
+  <section>
+    <div class="caps">Sommaire</div>
+    <h2>Plan du rapport</h2>
+    <div class="toc">
+      <ol>
+        <li><span class="lbl">Résumé exécutif</span> <span class="pg">02</span></li>
+        <li><span class="lbl">Méthodologie</span> <span class="pg">03</span></li>
+        <li><span class="lbl">Vue d'ensemble du secteur</span> <span class="pg">04</span></li>
+        <li><span class="lbl">Analyse de visibilité IA</span> <span class="pg">05</span></li>
+        <li><span class="lbl">Top {{ report.top_n }} sociétés</span> <span class="pg">06</span></li>
+        <li><span class="lbl">Insights &amp; recommandations</span> <span class="pg">08</span></li>
+        <li><span class="lbl">Sources web mobilisées</span> <span class="pg">09</span></li>
+        <li><span class="lbl">Glossaire &amp; FAQ</span> <span class="pg">10</span></li>
+        <li><span class="lbl">À propos de Geoperf</span> <span class="pg">11</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============== EXECUTIVE SUMMARY ============== -->
+  <section class="page-break">
+    <div class="caps">Section 01</div>
+    <h2>Résumé exécutif</h2>
+    <div class="exec-block">{{ sections.executive_summary }}</div>
+
+    <h3>Chiffres clés en un coup d'œil</h3>
+    <div class="kpi-grid">
+      <div class="kpi-card featured">
+        <div class="num">{{ report.companies_count }}</div>
+        <div class="lbl">Sociétés identifiées</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ stats.cited_by_4_llms + stats.cited_by_3_llms }}</div>
+        <div class="lbl">Top tier (3-4 LLM)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ report.total_sources }}</div>
+        <div class="lbl">Sources web citées</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ report.llms_count }}</div>
+        <div class="lbl">LLM interrogés</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============== METHODOLOGY ============== -->
+  <section class="page-break">
+    <div class="caps">Section 02</div>
+    <h2>Méthodologie</h2>
+    <p>{{ sections.methodology }}</p>
+
+    <h3>Modèles LLM interrogés</h3>
+    <div class="kpi-grid">
+      {% for llm in report.llm_list %}
+      <div class="kpi-card">
+        <div class="num" style="font-size:14pt; line-height:1.2;">{{ llm.label }}</div>
+        <div class="lbl">{{ llm.provider }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <h3>Pipeline de traitement</h3>
+    <ol style="margin-left: 6mm;">
+      <li><strong>Extraction parallèle</strong> : chaque modèle reçoit le même prompt structuré demandant les top {{ report.top_n }} acteurs du secteur, en JSON normalisé.</li>
+      <li><strong>Consolidation</strong> : algorithme de dédoublonnage par domaine racine et par nom normalisé (suppression suffixes légaux : Inc, SAS, GmbH, etc.).</li>
+      <li><strong>Calcul de scoring</strong> : pour chaque société, calcul du score de visibilité (0-{{ report.llms_count }}), de la position moyenne et du nombre de sources distinctes.</li>
+      <li><strong>Stockage horodaté</strong> : les réponses brutes de chaque LLM sont conservées dans Supabase pour audit et reproductibilité.</li>
+      <li><strong>Synthèse rédactionnelle</strong> : génération automatisée des sections du livre blanc à partir des données consolidées.</li>
+    </ol>
+
+    <h3>Limites de l'etude</h3>
+    <p class="subtle">Cette etude reflete une perception a un instant donne. Les LLM mettent a jour leur base de connaissances et leurs algorithmes de classement regulierement. Les societes non citees peuvent exister, voire dominer leur marche, mais souffrir d'une moindre exposition dans les sources web indexees par les modeles. Geoperf publie une mise a jour semestrielle de chaque etude sectorielle.</p>
+  </section>
+
+  <section class="page-break">
+    <div class="caps">Section 03</div>
+    <h2>Vue d'ensemble du secteur</h2>
+    <p>{{ sections.sector_overview }}</p>
+
+    {% if charts.geo_distribution and charts.geo_distribution|length > 0 %}
+    <h3>Repartition geographique des acteurs identifies</h3>
+    <div class="chart-section">
+      <div>
+        <svg class="chart-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+          {% for slice in charts.geo_distribution %}
+          <path d="{{ slice.path }}" fill="{{ slice.color }}" stroke="#FFFFFF" stroke-width="0.5"/>
+          {% endfor %}
+          <circle cx="100" cy="100" r="35" fill="#FFFFFF"/>
+          <text x="100" y="98" font-family="'Source Serif Pro', serif" font-size="20" font-weight="500" fill="#042C53" text-anchor="middle">{{ report.companies_count }}</text>
+          <text x="100" y="112" font-family="'Inter', sans-serif" font-size="7" fill="#5F5E5A" text-anchor="middle" letter-spacing="1">SOCIETES</text>
+        </svg>
+        <div class="chart-caption">Distribution par pays de siege social</div>
+      </div>
+      <div class="chart-text">
+        <h4>Concentration geographique</h4>
+        <div class="legend">
+          {% for slice in charts.geo_distribution %}
+          <div class="legend-item">
+            <span class="legend-swatch" style="background:{{ slice.color }}"></span>
+            <span>{{ slice.label }} <strong>({{ slice.count }})</strong></span>
+          </div>
+          {% endfor %}
+        </div>
+        <p class="subtle" style="margin-top: 4mm;">La concentration geographique des acteurs cites par les LLM reflete a la fois la realite du marche et le biais de presence numerique des sources web indexees.</p>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="page-break">
+    <div class="caps">Section 04 - La section differenciante</div>
+    <h2>Analyse de visibilite IA</h2>
+    <p style="font-size:10pt; color:#5F5E5A; margin-bottom:6mm;">Distribution des societes par nombre de LLM citants - sur les {{ report.companies_count }} societes uniques identifiees.</p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card featured">
+        <div class="num">{{ stats.cited_by_4_llms }}</div>
+        <div class="lbl">Cites par 4/4 LLM</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ stats.cited_by_3_llms }}</div>
+        <div class="lbl">Cites par 3/4 LLM</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ stats.cited_by_2_llms }}</div>
+        <div class="lbl">Cites par 2/4 LLM</div>
+      </div>
+      <div class="kpi-card">
+        <div class="num">{{ stats.cited_by_1_llm }}</div>
+        <div class="lbl">Cite par 1/4 LLM</div>
+      </div>
+    </div>
+
+    <p>{{ sections.ai_visibility_analysis }}</p>
+
+    {% if charts.visibility_pyramid %}
+    <h3>Pyramide de visibilite</h3>
+    <svg class="chart-svg" viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" style="max-height:80mm;">
+      {% for layer in charts.visibility_pyramid %}
+      <rect x="{{ layer.x }}" y="{{ layer.y }}" width="{{ layer.width }}" height="40" fill="{{ layer.color }}" stroke="#FFFFFF" stroke-width="1"/>
+      <text x="{{ layer.x + layer.width / 2 }}" y="{{ layer.y + 18 }}" font-family="'Source Serif Pro', serif" font-size="16" font-weight="500" fill="#FFFFFF" text-anchor="middle">{{ layer.count }}</text>
+      <text x="{{ layer.x + layer.width / 2 }}" y="{{ layer.y + 32 }}" font-family="'Inter', sans-serif" font-size="9" fill="#FFFFFF" text-anchor="middle" opacity="0.85">{{ layer.label }}</text>
+      {% endfor %}
+    </svg>
+    <div class="chart-caption">Pyramide inversee : plus la base est large, plus la perception du secteur est dispersee.</div>
+    {% endif %}
+
+    {% if charts.llm_generosity %}
+    <h3>Generosite par LLM</h3>
+    <svg class="chart-svg" viewBox="0 0 600 200" xmlns="http://www.w3.org/2000/svg" style="max-height:65mm;">
+      {% for bar in charts.llm_generosity %}
+      <rect x="{{ bar.x }}" y="{{ bar.y }}" width="80" height="{{ bar.height }}" fill="{{ bar.color }}"/>
+      <text x="{{ bar.x + 40 }}" y="{{ bar.y - 5 }}" font-family="'Source Serif Pro', serif" font-size="14" font-weight="500" fill="#042C53" text-anchor="middle">{{ bar.count }}</text>
+      <text x="{{ bar.x + 40 }}" y="180" font-family="'Inter', sans-serif" font-size="9" fill="#2C2C2A" text-anchor="middle" font-weight="500">{{ bar.label }}</text>
+      <text x="{{ bar.x + 40 }}" y="192" font-family="'Inter', sans-serif" font-size="7" fill="#5F5E5A" text-anchor="middle" letter-spacing="0.5">{{ bar.provider }}</text>
+      {% endfor %}
+      <line x1="40" y1="160" x2="560" y2="160" stroke="#5F5E5A" stroke-width="0.5"/>
+    </svg>
+    <div class="chart-caption">Nombre de societes citees par chaque LLM dans cette etude.</div>
+    {% endif %}
+  </section>
+
+  <section class="page-break">
+    <div class="caps">Section 05</div>
+    <h2>Top {{ report.top_n }} societes du secteur</h2>
+    <p style="font-size:10pt; color:#5F5E5A; margin-bottom:4mm;">Classement consolide. Le score IA indique le nombre de LLM (sur {{ report.llms_count }}) qui ont cite chaque societe. La grille a droite indique quel LLM a cite (case sombre) ou non (case claire).</p>
+
+    <div class="company-list">
+      {% for c in sections.top_companies_summary %}
+      {% set company = companies_data[loop.index0] %}
+      <div class="company-card">
+        <div class="rank-block">
+          <div class="rank-num">{{ "%02d"|format(c.rank) }}</div>
+          {% if company.country %}<div class="country-flag">{{ company.country }}</div>{% endif %}
+        </div>
+        <div class="body">
+          <div class="name">{{ c.name }}</div>
+          {% if company.domain %}<div class="domain">{{ company.domain }}</div>{% endif %}
+          <div class="one-liner">{{ c.one_liner }}</div>
+          <div class="meta-row">
+            {% if company.employees_range %}<span>{{ company.employees_range }} salaries</span>{% endif %}
+            {% if company.source_count %}<span>{{ company.source_count }} sources</span>{% endif %}
+            {% if company.avg_position %}<span>position moyenne {{ company.avg_position }}</span>{% endif %}
+          </div>
+          <div class="notes">{{ c.context_note }}</div>
+        </div>
+        <div class="visibility">
+          {% set score_class = 'score-' ~ company.visibility_score %}
+          <div class="pill {{ score_class }}">IA {{ company.visibility_score }}/{{ report.llms_count }}</div>
+          <div class="llm-grid">
+            <div class="{% if company.cited_by.perplexity %}cited{% endif %}">PXTY</div>
+            <div class="{% if company.cited_by.openai %}cited{% endif %}">GPT</div>
+            <div class="{% if company.cited_by.google %}cited{% endif %}">GEM</div>
+            <div class="{% if company.cited_by.anthropic %}cited{% endif %}">CLD</div>
+          </div>
+          <div class="ai-note">{{ c.ai_visibility_note }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="page-break">
+    <div class="caps">Section 06</div>
+    <h2>Insights &amp; recommandations</h2>
+    {% for insight in sections.insights_and_recommendations %}
+    <div class="insight">
+      <div class="title">{{ insight.title }}</div>
+      <div class="body">{{ insight.body }}</div>
+    </div>
+    {% endfor %}
+  </section>
+
+  {% if sources_aggregated and sources_aggregated|length > 0 %}
+  <section class="page-break">
+    <div class="caps">Section 07</div>
+    <h2>Sources web mobilisees</h2>
+    <p style="font-size:10pt; color:#5F5E5A; margin-bottom:4mm;">Liste consolidee des sources web citees par les LLM dans cette etude.</p>
+    <table class="sources-table">
+      <thead><tr><th style="width:35mm;">Editeur</th><th>Titre</th><th style="width:18mm; text-align:center;">Cite par</th></tr></thead>
+      <tbody>
+        {% for src in sources_aggregated %}
+        <tr>
+          <td><strong>{{ src.publisher or "-" }}</strong></td>
+          <td><div>{{ src.title or "Source non titree" }}</div><div class="url">{{ src.url }}</div></td>
+          <td style="text-align:center; font-family:'IBM Plex Mono', monospace; font-size:9pt;">{{ src.citations }}x</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <section class="page-break">
+    <div class="caps">Section 08 - Annexe A</div>
+    <h2>Glossaire</h2>
+    <div class="glossary-item"><div class="term">LLM (Large Language Model)</div><div class="definition">Modele d'intelligence artificielle entraine sur de vastes corpus de texte, capable de generer des reponses en langage naturel. Exemples : ChatGPT (OpenAI), Gemini (Google), Claude (Anthropic), Perplexity.</div></div>
+    <div class="glossary-item"><div class="term">GEO (Generative Engine Optimization)</div><div class="definition">Discipline marketing visant a optimiser la visibilite d'une marque dans les reponses generees par les LLM. Successeur logique du SEO a l'ere de la recherche conversationnelle.</div></div>
+    <div class="glossary-item"><div class="term">Score de visibilite IA</div><div class="definition">Indicateur Geoperf compris entre 0 et {{ report.llms_count }}, mesurant le nombre de LLM ayant cite spontanement une societe. Un score de {{ report.llms_count }}/{{ report.llms_count }} indique une presence universelle.</div></div>
+    <div class="glossary-item"><div class="term">Coherence inter-LLM</div><div class="definition">Mesure de la stabilite du classement d'une societe a travers les differents LLM. Une societe classee systematiquement #2 chez tous beneficie d'une perception consolidee.</div></div>
+    <div class="glossary-item"><div class="term">Position moyenne</div><div class="definition">Moyenne des rangs attribues a une societe par les LLM qui l'ont citee. Plus le chiffre est bas, plus la societe est positionnee en haut des listes generees.</div></div>
+    <div class="glossary-item"><div class="term">Source web mobilisee</div><div class="definition">URL externe citee par un LLM disposant de capacites de recherche web pour etayer sa reponse. Indicateur d'autorite d'une societe sur le web indexe.</div></div>
+
+    <h2 style="margin-top:14mm;">Foire aux questions</h2>
+    <div class="faq-item"><div class="q">Pourquoi 4 LLM et pas 1 seul ?</div><div class="a">Chaque LLM a son propre corpus d'entrainement et ses propres biais. Interroger 4 modeles permet d'identifier les societes universellement reconnues vs les perceptions singulieres d'un modele isole.</div></div>
+    <div class="faq-item"><div class="q">Comment ma societe peut-elle ameliorer son score de visibilite IA ?</div><div class="a">Plusieurs leviers : presence dans Bloomberg/FT/Reuters, mise a jour de la page Wikipedia, contenu de reference sur le site corporate, presence dans Forrester/Gartner. Geoperf propose des audits dedies.</div></div>
+    <div class="faq-item"><div class="q">Cette etude sera-t-elle mise a jour ?</div><div class="a">Oui. Geoperf publie une mise a jour semestrielle de chaque etude sectorielle. Les abonnes sont notifies des nouvelles editions.</div></div>
+    <div class="faq-item"><div class="q">Pourquoi certaines grandes societes ne figurent-elles pas ?</div><div class="a">Une absence dans cette etude reflete une absence dans la perception spontanee des LLM, pas une absence du marche. C'est precisement le signal d'alerte que cette etude vise a formaliser.</div></div>
+    <div class="faq-item"><div class="q">Puis-je commander une etude sur ma propre categorie ?</div><div class="a">Oui. Geoperf accepte des commandes d'etudes sur mesure sur toute sous-categorie B2B. Delai standard : 7 jours ouvres. Contact : contact@geoperf.com.</div></div>
+  </section>
+
+  <section class="page-break">
+    <div class="caps">Section 09</div>
+    <h2>A propos de Geoperf</h2>
+    <div class="about-box">
+      <h3>Notre mission</h3>
+      <p>{{ sections.about_geoperf }}</p>
+    </div>
+    <h3>Comment nous contacter</h3>
+    <p><strong>Site web :</strong> geoperf.com<br><strong>Email :</strong> contact@geoperf.com<br><strong>LinkedIn :</strong> linkedin.com/company/geoperf</p>
+    <h3>Audits sur mesure</h3>
+    <p>Geoperf propose des audits de visibilite IA personnalises pour les directions marketing souhaitant mesurer et ameliorer la perception de leur marque par les modeles de langage. Le service inclut un diagnostic complet, une comparaison concurrentielle et un plan d'action GEO.</p>
+    <p>Pour reserver un appel decouverte avec le fondateur : <strong>geoperf.com/contact</strong></p>
+
+    <div class="legal-footer">
+      Geoperf est un produit de Jourdechance SAS - SIREN 838 114 619 - RCS Nanterre - 31 rue Diaz, 92100 Boulogne-Billancourt, France<br>
+      Etude generee le {{ report.generated_at_human }} - Identifiant : {{ report.report_id }}<br>
+      Reproduction interdite sans autorisation ecrite. Les donnees presentees proviennent des reponses publiees par les modeles LLM interroges et de leurs sources web associees.<br>
+      Geoperf decline toute responsabilite quant a l'exactitude des donnees fournies par les LLM, qui constituent une perception et non une verite absolue du marche.
+    </div>
+  </section>
+
+</body>
+</html>

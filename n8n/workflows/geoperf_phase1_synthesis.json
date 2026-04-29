@@ -1,0 +1,145 @@
+{
+  "name": "GEOPERF Phase 1.1 — Synthesis & HTML Render",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "geoperf-synthesis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n_webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-300, 400],
+      "webhookId": "geoperf-synthesis"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "report_id", "value": "={{ $json.body.report_id }}", "type": "string"},
+            {"id": "2", "name": "model", "value": "={{ $json.body.model || 'anthropic/claude-haiku-4.5' }}", "type": "string"},
+            {"id": "3", "name": "top_n", "value": "={{ $json.body.top_n || 50 }}", "type": "number"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "n_set_params",
+      "name": "Extract params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-60, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT json_build_object('report_id', r.id, 'category', r.sous_categorie, 'year', 2026, 'providers_used', json_build_array('perplexity','openai','google','anthropic'), 'companies', json_agg(json_build_object('rank_consolidated', rc.rank, 'name', c.nom, 'name_normalized', c.nom_normalise, 'domain', c.domain, 'country', c.country, 'employees_range', c.employees_range, 'best_description', c.description, 'cited_by', rc.cited_by, 'visibility_score', rc.visibility_score, 'avg_position', rc.avg_position_in_lists, 'source_count', rc.source_count) ORDER BY rc.rank), 'stats', json_build_object('total_unique_companies', COUNT(*), 'cited_by_4_llms', COUNT(*) FILTER (WHERE rc.visibility_score = 4), 'cited_by_3_llms', COUNT(*) FILTER (WHERE rc.visibility_score = 3), 'cited_by_2_llms', COUNT(*) FILTER (WHERE rc.visibility_score = 2), 'cited_by_1_llm', COUNT(*) FILTER (WHERE rc.visibility_score = 1))) AS payload FROM public.reports r JOIN public.report_companies rc ON rc.report_id = r.id JOIN public.companies c ON c.id = rc.company_id WHERE r.id = (($1::jsonb)->>'report_id')::uuid GROUP BY r.id, r.sous_categorie;",
+        "options": {"queryReplacement": "={{ JSON.stringify({report_id: $json.report_id}) }}"}
+      },
+      "id": "n_get_consolidated",
+      "name": "Get consolidated payload",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [180, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build the LLM prompt from the consolidated payload\nconst payload = items[0].json.payload;\nconst companiesCompact = payload.companies.map(c => ({\n  r: c.rank_consolidated,\n  n: c.name,\n  ctry: c.country,\n  viz: c.visibility_score,\n  cited: Object.entries(c.cited_by || {}).filter(([,v]) => v).map(([k]) => k),\n  desc: (c.best_description || '').substring(0, 150),\n}));\n\nconst userPrompt = `Étude ${payload.category} ${payload.year} pour livre blanc 12+ pages.\n\nDonnées: ${payload.stats.total_unique_companies} sociétés. Stats: ${JSON.stringify(payload.stats)}\n\n${JSON.stringify(companiesCompact)}\n\nJSON STRICT (commence par {):\n{\n  \"executive_summary\": \"250-300 mots, OUVRE sur LE chiffre marquant. Style FT.\",\n  \"methodology\": \"200-250 mots: 4 LLM via OpenRouter, dédoublonnage, scoring 0-4.\",\n  \"sector_overview\": \"350-400 mots vue secteur ${payload.category}: dynamiques, géographie, enjeux 2026.\",\n  \"ai_visibility_analysis\": \"500-600 mots: pyramide visibilité, analyse par LLM, biais géographique, conséquence pour CMO.\",\n  \"top_companies_summary\": [{\"rank\":1,\"name\":\"...\",\"one_liner\":\"max 25 mots\",\"ai_visibility_note\":\"1 phrase\",\"context_note\":\"1 phrase\"}, ...${payload.companies.length} items],\n  \"insights_and_recommendations\": [{\"title\":\"...\",\"body\":\"100-150 mots\"}, ...5 items],\n  \"about_geoperf\": \"100-120 mots, mentionne Jourdechance SAS SIREN 838 114 619\"\n}\n\nAucun chiffre hors données fournies.`;\n\nconst systemPrompt = 'Tu rédiges des études sectorielles institutionnelles pour Geoperf (style FT/Forrester). Sortie : JSON STRICT démarrant par {.';\n\nreturn [{ json: { ...$('Extract params').item.json, payload, userPrompt, systemPrompt } }];"
+      },
+      "id": "n_build_prompt",
+      "name": "Build synthesis prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.userPrompt }}",
+        "messages": {
+          "messageValues": [
+            {"type": "SystemMessagePromptTemplate", "message": "={{ $json.systemPrompt }}"}
+          ]
+        }
+      },
+      "id": "n_synthesis",
+      "name": "Synthesis (Haiku/Sonnet/Opus)",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4.5",
+        "options": {"temperature": 0.4, "maxTokens": 8000}
+      },
+      "id": "n_synthesis_model",
+      "name": "Model (Haiku 4.5 default)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [720, 580]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the LLM JSON output (tolerant to markdown fences)\nconst raw = items[0].json.text || '';\nlet cleaned = raw.replace(/^```(?:json)?\\s*\\n?/i, '').replace(/\\n?```\\s*$/i, '');\nconst startIdx = cleaned.indexOf('{');\nif (startIdx > 0) cleaned = cleaned.substring(startIdx);\nconst endIdx = cleaned.lastIndexOf('}');\nif (endIdx >= 0) cleaned = cleaned.substring(0, endIdx + 1);\nlet sections;\ntry {\n  sections = JSON.parse(cleaned);\n} catch (e) {\n  // Recovery: truncate at last complete section\n  let bestEnd = -1, depth = 0, inStr = false, esc = false;\n  for (let i = 0; i < cleaned.length; i++) {\n    const ch = cleaned[i];\n    if (esc) { esc = false; continue; }\n    if (ch === '\\\\' && inStr) { esc = true; continue; }\n    if (ch === '\"') inStr = !inStr;\n    if (inStr) continue;\n    if (ch === '{') depth++;\n    else if (ch === '}') { depth--; if (depth === 0) bestEnd = i; }\n  }\n  if (bestEnd > 0) sections = JSON.parse(cleaned.substring(0, bestEnd + 1));\n  else throw new Error('Cannot parse LLM JSON: ' + e.message);\n}\nreturn [{ json: { ...$('Build synthesis prompt').item.json, sections } }];"
+      },
+      "id": "n_parse_sections",
+      "name": "Parse sections JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://qfdvdcvqknoqfxetttch.supabase.co/functions/v1/render_white_paper",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ report_id: $json.report_id, sections: $json.sections, top_n: $json.top_n }) }}",
+        "options": {"timeout": 30000}
+      },
+      "id": "n_call_edge",
+      "name": "Call render_white_paper Edge Function",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, report_id: $json.report_id, html_url: $json.html_url, html_size: $json.html_size_bytes, stats: $json.stats } }}",
+        "options": {}
+      },
+      "id": "n_respond",
+      "name": "Webhook response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1440, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger":             {"main": [[{"node": "Extract params", "type": "main", "index": 0}]]},
+    "Extract params":              {"main": [[{"node": "Get consolidated payload", "type": "main", "index": 0}]]},
+    "Get consolidated payload":    {"main": [[{"node": "Build synthesis prompt", "type": "main", "index": 0}]]},
+    "Build synthesis prompt":      {"main": [[{"node": "Synthesis (Haiku/Sonnet/Opus)", "type": "main", "index": 0}]]},
+    "Model (Haiku 4.5 default)":   {"ai_languageModel": [[{"node": "Synthesis (Haiku/Sonnet/Opus)", "type": "ai_languageModel", "index": 0}]]},
+    "Synthesis (Haiku/Sonnet/Opus)": {"main": [[{"node": "Parse sections JSON", "type": "main", "index": 0}]]},
+    "Parse sections JSON":         {"main": [[{"node": "Call render_white_paper Edge Function", "type": "main", "index": 0}]]},
+    "Call render_white_paper Edge Function": {"main": [[{"node": "Webhook response", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{"name": "geoperf"}, {"name": "phase1.1"}, {"name": "synthesis"}]
+}

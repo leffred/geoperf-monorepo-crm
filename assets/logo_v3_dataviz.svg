@@ -1,0 +1,15 @@
+<svg width="320" height="120" viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>GEOPERF logo - Data viz/Insight direction</title>
+  <desc>Concentric arcs forming a radar/visibility motif, teal palette, clean sans-serif.</desc>
+  <g>
+    <g transform="translate(48, 60)">
+      <path d="M -32 0 A 32 32 0 0 1 32 0" fill="none" stroke="#0F6E56" stroke-width="3" stroke-linecap="round"/>
+      <path d="M -22 0 A 22 22 0 0 1 22 0" fill="none" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/>
+      <path d="M -12 0 A 12 12 0 0 1 12 0" fill="none" stroke="#5DCAA5" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="0" cy="0" r="3" fill="#085041"/>
+      <line x1="-32" y1="0" x2="32" y2="0" stroke="#085041" stroke-width="0.8"/>
+    </g>
+    <text x="100" y="58" font-family="-apple-system, 'Inter', 'IBM Plex Sans', sans-serif" font-size="32" font-weight="500" fill="#085041" letter-spacing="-0.3">geoperf</text>
+    <text x="100" y="78" font-family="-apple-system, 'Inter', sans-serif" font-size="12" font-weight="400" fill="#0F6E56">Mesurez votre visibilit&#233; dans les LLM</text>
+  </g>
+</svg>

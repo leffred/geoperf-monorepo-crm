@@ -1,0 +1,272 @@
+{
+  "name": "GEOPERF Phase 1 — Extraction & Consolidation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "geoperf-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n_webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-300, 600],
+      "webhookId": "geoperf-extract"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "category_slug", "value": "={{ $json.body.category_slug || 'asset-management' }}", "type": "string"},
+            {"id": "2", "name": "top_n", "value": "={{ $json.body.top_n || 50 }}", "type": "number"},
+            {"id": "3", "name": "year", "value": "={{ $json.body.year || 2026 }}", "type": "number"},
+            {"id": "4", "name": "owner_email", "value": "={{ $json.body.owner_email || 'flefebvre@geoperf.com' }}", "type": "string"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "n_set_params",
+      "name": "Extract params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-60, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS category_id, c.nom AS sous_categorie, parent.nom AS categorie_parent FROM public.categories c LEFT JOIN public.categories parent ON c.parent_id = parent.id WHERE c.slug = $1 LIMIT 1;",
+        "options": {"queryReplacement": "={{ [$json.category_slug] }}"}
+      },
+      "id": "n_get_category",
+      "name": "Get category from slug",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [180, 600],
+      "credentials": {"postgres": {"id": "TODO_GEOPERF_POSTGRES_CREDENTIAL", "name": "Supabase GEOPERF"}},
+      "notes": "Credential à créer : Postgres pointant vers db.qfdvdcvqknoqfxetttch.supabase.co (port 5432, user postgres, mdp = celui fourni à la création du projet, db postgres, SSL)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.reports (category_id, sous_categorie, top_n, status, slug_public, owner_email) VALUES ($1, $2, $3, 'running', $4, $5) RETURNING id, sous_categorie, top_n;",
+        "options": {"queryReplacement": "={{ [$json.category_id, $json.sous_categorie, $('Extract params').item.json.top_n, $('Extract params').item.json.category_slug, $('Extract params').item.json.owner_email] }}"}
+      },
+      "id": "n_create_report",
+      "name": "Create report (status=running)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [420, 600],
+      "credentials": {"postgres": {"id": "TODO_GEOPERF_POSTGRES_CREDENTIAL", "name": "Supabase GEOPERF"}}
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "report_id", "value": "={{ $json.id }}", "type": "string"},
+            {"id": "2", "name": "sous_categorie", "value": "={{ $json.sous_categorie }}", "type": "string"},
+            {"id": "3", "name": "top_n", "value": "={{ $json.top_n }}", "type": "number"},
+            {"id": "4", "name": "year", "value": "={{ $('Extract params').item.json.year }}", "type": "number"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "n_set_context",
+      "name": "Prepare context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 600]
+    },
+
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es un analyste sectoriel B2B. Identifie les {{ $json.top_n }} sociétés mondiales les plus importantes du secteur \"{{ $json.sous_categorie }}\" en {{ $json.year }}. Pour chaque société : nom officiel, domaine principal (ex: blackrock.com), pays, ville du siège, fourchette d'effectifs, description en 1 phrase, métrique clé du secteur (nom/valeur/unité/année), 3 sources web vérifiées (URL, titre, éditeur). Réponse en JSON STRICT, sans préambule, sans backticks. Schéma : {\"metadata\":{\"category\":\"...\",\"year\":...,\"top_n_requested\":...,\"language\":\"fr\"},\"companies\":[{\"rank\":1,\"name\":\"...\",\"domain\":\"...\",\"country\":\"...\",\"city\":\"...\",\"employees_range\":\"...\",\"description\":\"...\",\"key_metric\":{\"name\":\"...\",\"value\":\"...\",\"unit\":\"...\",\"as_of_year\":2025},\"sources\":[{\"url\":\"https://...\",\"title\":\"...\",\"publisher\":\"...\"}]}]}"
+      },
+      "id": "n_perplexity",
+      "name": "1. Perplexity Sonar Pro",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [960, 200]
+    },
+    {
+      "parameters": {"model": "perplexity/sonar-pro", "options": {"temperature": 0.2, "maxTokens": 4000}},
+      "id": "n_perplexity_model",
+      "name": "Model: perplexity/sonar-pro",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1020, 380],
+      "credentials": {"openRouterApi": {"id": "TODO_OPENROUTER_CREDENTIAL", "name": "OpenRouter GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Quelles sont les {{ $json.top_n }} sociétés majeures du secteur \"{{ $json.sous_categorie }}\" dans le monde en {{ $json.year }} ? Utilise web search pour des données fraîches. Pour chaque société : nom, domaine, pays, ville, effectifs, description (1 phrase), métrique clé (nom/valeur/unité/année), 3 sources (URL/titre/éditeur), confidence (high/medium/low). Réponse JSON STRICT, sans backticks. Schéma : {\"metadata\":{\"category\":\"...\",\"year\":...,\"top_n_requested\":...,\"data_freshness_note\":\"...\",\"language\":\"fr\"},\"companies\":[{\"rank\":1,\"name\":\"...\",\"domain\":\"...\",\"country\":\"...\",\"city\":\"...\",\"employees_range\":\"...\",\"description\":\"...\",\"key_metric\":{\"name\":\"...\",\"value\":\"...\",\"unit\":\"...\",\"as_of_year\":2025},\"sources\":[],\"confidence\":\"high|medium|low\"}]}"
+      },
+      "id": "n_gpt",
+      "name": "2. GPT-4o search",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [960, 480]
+    },
+    {
+      "parameters": {"model": "openai/gpt-4o-search-preview", "options": {"temperature": 0.2, "maxTokens": 4000}},
+      "id": "n_gpt_model",
+      "name": "Model: openai/gpt-4o-search-preview",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1020, 660],
+      "credentials": {"openRouterApi": {"id": "TODO_OPENROUTER_CREDENTIAL", "name": "OpenRouter GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Question d'étude sur la perception sectorielle par les LLM. Quelles sont les {{ $json.top_n }} sociétés majeures du secteur \"{{ $json.sous_categorie }}\" dans le monde, basé sur tes données d'entraînement uniquement (cutoff fin 2024) ? Sois honnête : moins de sociétés bien connues vaut mieux qu'une longue liste hallucinée. JSON STRICT, sans backticks. Schéma : {\"metadata\":{\"category\":\"...\",\"year\":...,\"top_n_requested\":...,\"training_cutoff_note\":\"...\",\"language\":\"fr\"},\"companies\":[{\"rank\":1,\"name\":\"...\",\"domain\":\"...\",\"country\":\"...\",\"city\":\"...\",\"employees_range\":\"...\",\"description\":\"...\",\"key_metric\":{\"name\":\"...\",\"value\":\"...\",\"unit\":\"...\",\"as_of_year\":2024},\"sources\":[],\"confidence\":\"high|medium|low\"}]}"
+      },
+      "id": "n_gemini",
+      "name": "3. Gemini 2.5 Pro",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [960, 760]
+    },
+    {
+      "parameters": {"model": "google/gemini-2.5-pro", "options": {"temperature": 0.2, "maxTokens": 8000}},
+      "id": "n_gemini_model",
+      "name": "Model: google/gemini-2.5-pro",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1020, 940],
+      "credentials": {"openRouterApi": {"id": "TODO_OPENROUTER_CREDENTIAL", "name": "OpenRouter GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Étude de perception sectorielle inter-LLM : quelles sont les {{ $json.top_n }} sociétés majeures du secteur \"{{ $json.sous_categorie }}\" dans le monde, basé sur tes données d'entraînement (cutoff début 2025) ? Honnêteté > complétude. JSON STRICT, sans backticks. Schéma : {\"metadata\":{\"category\":\"...\",\"year\":...,\"top_n_requested\":...,\"training_cutoff_note\":\"...\",\"language\":\"fr\"},\"companies\":[{\"rank\":1,\"name\":\"...\",\"domain\":\"...\",\"country\":\"...\",\"city\":\"...\",\"employees_range\":\"...\",\"description\":\"...\",\"key_metric\":{\"name\":\"...\",\"value\":\"...\",\"unit\":\"...\",\"as_of_year\":2024},\"sources\":[],\"confidence\":\"high|medium|low\"}]}"
+      },
+      "id": "n_claude",
+      "name": "4. Claude Sonnet 4.6",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [960, 1040]
+    },
+    {
+      "parameters": {"model": "anthropic/claude-sonnet-4.6", "options": {"temperature": 0.2, "maxTokens": 4000}},
+      "id": "n_claude_model",
+      "name": "Model: anthropic/claude-sonnet-4.6",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [1020, 1220],
+      "credentials": {"openRouterApi": {"id": "TODO_OPENROUTER_CREDENTIAL", "name": "OpenRouter GEOPERF"}}
+    },
+
+    {
+      "parameters": {"numberInputs": 4},
+      "id": "n_merge",
+      "name": "Merge 4 LLM responses",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1320, 600]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// GEOPERF — Consolidation cross-LLM (port JS de consolidate.py)\n// Reçoit 4 items en input (Perplexity, GPT, Gemini, Claude). Chacun = sortie chainLlm avec .text.\n\nconst LEGAL = ['inc','incorporated','corp','corporation','company','co','ltd','limited','llc','sa','sas','sarl','ag','gmbh','plc','spa','bv','nv','group','holding','holdings','international','global'];\n\nconst normalize = (s) => {\n  if (!s) return '';\n  let n = s.normalize('NFKD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n  n = n.replace(/[^\\w\\s\\-&]/g, ' ').replace(/\\s+/g, ' ').trim();\n  const tokens = n.split(' ');\n  while (tokens.length && LEGAL.includes(tokens[tokens.length - 1].replace(/\\.$/,''))) tokens.pop();\n  return tokens.join(' ');\n};\n\nconst rootDomain = (d) => {\n  if (!d) return '';\n  let dom = d.toLowerCase().trim().replace(/^https?:\\/\\//,'').replace(/^www\\./,'').split('/')[0].split('?')[0];\n  const parts = dom.split('.');\n  return parts.length >= 2 ? parts.slice(-2).join('.') : dom;\n};\n\n// Clé de dédoublonnage : on PRIVILÉGIE le nom normalisé (résout le cas Goldman Sachs AM\n// avec domaines gsam.com vs goldmansachs.com vs gsam.com/etfs). Le domaine reste\n// collecté en métadonnée et sert au choix du canonicalDomain en sortie.\nconst matchKey = (name, domain) => {\n  const n = normalize(name);\n  if (n) return 'n:' + n;\n  const d = rootDomain(domain);\n  return d ? 'd:' + d : '';\n};\n\n// Extraction sécurisée du JSON depuis la réponse LLM\nconst parseLLM = (text) => {\n  if (!text) return null;\n  try { return JSON.parse(text); } catch (e) {}\n  // Tentative : extraire le premier { ... } équilibré\n  const m = text.match(/\\{[\\s\\S]*\\}/);\n  if (m) { try { return JSON.parse(m[0]); } catch (e) {} }\n  return null;\n};\n\nconst providers = ['perplexity', 'openai', 'google', 'anthropic'];\nconst llmOutputs = {};\nfor (let i = 0; i < items.length && i < 4; i++) {\n  const txt = items[i]?.json?.text;\n  llmOutputs[providers[i]] = parseLLM(txt) || { companies: [] };\n}\n\nconst byKey = new Map();\nfor (const provider of providers) {\n  const payload = llmOutputs[provider];\n  for (const c of (payload?.companies || [])) {\n    const key = matchKey(c.name, c.domain);\n    if (!key) continue;\n    if (!byKey.has(key)) byKey.set(key, { names_seen: [], domains_seen: [], countries: [], cities: [], employees_ranges: [], descriptions: [], key_metrics: [], cited_by: {}, ranks_per_llm: {}, confidence_per_llm: {}, sources: [] });\n    const e = byKey.get(key);\n    e.names_seen.push(c.name);\n    if (c.domain) e.domains_seen.push(rootDomain(c.domain));\n    if (c.country) e.countries.push(c.country);\n    if (c.city) e.cities.push(c.city);\n    if (c.employees_range) e.employees_ranges.push(c.employees_range);\n    if (c.description) e.descriptions.push([provider, c.description]);\n    if (c.key_metric) e.key_metrics.push([provider, c.key_metric]);\n    e.cited_by[provider] = true;\n    if (c.rank != null) e.ranks_per_llm[provider] = c.rank;\n    if (c.confidence) e.confidence_per_llm[provider] = c.confidence;\n    for (const s of (c.sources || [])) if (s?.url) e.sources.push({ ...s, from_llm: provider });\n  }\n}\n\nconst priority = ['perplexity', 'openai', 'anthropic', 'google'];\nconst consolidated = [];\nfor (const [key, e] of byKey) {\n  const counts = {};\n  for (const n of e.names_seen) counts[n] = (counts[n] || 0) + 1;\n  const canonicalName = Object.entries(counts).sort((a,b) => b[1] - a[1])[0][0];\n  let canonicalDomain = '';\n  if (e.domains_seen.length) {\n    const dc = {};\n    for (const d of e.domains_seen) dc[d] = (dc[d] || 0) + 1;\n    canonicalDomain = Object.entries(dc).sort((a,b) => b[1] - a[1])[0][0];\n  }\n  let bestDesc = '';\n  for (const p of priority) { for (const [src, d] of e.descriptions) if (src === p) { bestDesc = d; break; } if (bestDesc) break; }\n  let bestMetric = null;\n  for (const p of priority) { for (const [src, m] of e.key_metrics) if (src === p && m) { bestMetric = m; break; } if (bestMetric) break; }\n  const citedFull = {};\n  for (const p of providers) citedFull[p] = !!e.cited_by[p];\n  const visScore = Object.values(citedFull).filter(Boolean).length;\n  const ranks = Object.values(e.ranks_per_llm).filter(r => r != null);\n  const avgPos = ranks.length ? Math.round(ranks.reduce((a,b)=>a+b,0)/ranks.length * 100) / 100 : null;\n  const sourceUrls = new Set(e.sources.map(s => s.url).filter(Boolean));\n  consolidated.push({\n    name: canonicalName,\n    name_normalized: normalize(canonicalName),\n    domain: canonicalDomain,\n    country: e.countries[0] || null,\n    city: e.cities[0] || null,\n    employees_range: e.employees_ranges[0] || null,\n    best_description: bestDesc,\n    key_metric: bestMetric,\n    cited_by: citedFull,\n    visibility_score: visScore,\n    ranks_per_llm: e.ranks_per_llm,\n    avg_position: avgPos,\n    source_count: sourceUrls.size,\n    sources: e.sources,\n    confidence_per_llm: e.confidence_per_llm,\n  });\n}\nconsolidated.sort((a, b) => (b.visibility_score - a.visibility_score) || ((a.avg_position ?? 999) - (b.avg_position ?? 999)));\nconsolidated.forEach((c, i) => c.rank_consolidated = i + 1);\n\nconst stats = { total_unique_companies: consolidated.length, cited_by_4_llms: 0, cited_by_3_llms: 0, cited_by_2_llms: 0, cited_by_1_llm: 0 };\nfor (const c of consolidated) stats['cited_by_' + c.visibility_score + '_llms'] = (stats['cited_by_' + c.visibility_score + '_llms'] || 0) + 1;\n\nconst ctx = $('Prepare context').item.json;\n\n// Output : un seul item avec tout le payload + les raw_responses prêts pour insertion\nreturn [{\n  json: {\n    report_id: ctx.report_id,\n    sous_categorie: ctx.sous_categorie,\n    year: ctx.year,\n    consolidated: { report_id: ctx.report_id, category: ctx.sous_categorie, year: ctx.year, providers_used: providers, companies: consolidated, stats: stats },\n    raw_responses: providers.map((p, i) => ({\n      report_id: ctx.report_id,\n      provider: p,\n      model: ['perplexity/sonar-pro','openai/gpt-4o-search-preview','google/gemini-2.5-pro','anthropic/claude-sonnet-4.6'][i],\n      prompt: '(stored in workflow logs)',\n      response_json: llmOutputs[p],\n      sources_json: (llmOutputs[p]?.companies || []).flatMap(c => c.sources || [])\n    }))\n  }\n}];"
+      },
+      "id": "n_consolidate",
+      "name": "Consolidate (JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 600]
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.raw_responses (report_id, provider, model, prompt, response_json, sources_json) SELECT (($1::jsonb)->>'report_id')::uuid, r->>'provider', r->>'model', r->>'prompt', (r->'response_json'), (r->'sources_json') FROM jsonb_array_elements(($1::jsonb)->'raw_responses') AS r;",
+        "options": {"queryReplacement": "={{ JSON.stringify({report_id: $('Consolidate (JS)').item.json.report_id, raw_responses: $('Consolidate (JS)').item.json.raw_responses}) }}"}
+      },
+      "id": "n_insert_raw",
+      "name": "Insert raw_responses (4 rows)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1800, 600],
+      "credentials": {"postgres": {"id": "TODO_GEOPERF_POSTGRES_CREDENTIAL", "name": "Supabase GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input_companies AS (SELECT (c->>'name') AS nom, (c->>'name_normalized') AS nom_normalise, NULLIF(c->>'domain','') AS domain, NULLIF(c->>'country','') AS country, NULLIF(c->>'employees_range','') AS employees_range, NULLIF(c->>'best_description','') AS description, (c->>'rank_consolidated')::int AS rank, (c->>'visibility_score')::int AS visibility_score, NULLIF(c->>'avg_position','null')::numeric AS avg_position, (c->>'source_count')::int AS source_count, (c->'cited_by') AS cited_by FROM jsonb_array_elements(($1::jsonb)->'companies') AS c), upsert_companies AS (INSERT INTO public.companies (nom, nom_normalise, domain, country, employees_range, description) SELECT nom, nom_normalise, domain, country, employees_range, description FROM input_companies ON CONFLICT (nom_normalise, domain) DO UPDATE SET last_enriched_at = NOW() RETURNING id, nom_normalise, domain) INSERT INTO public.report_companies (report_id, company_id, rank, cited_by, visibility_score, avg_position_in_lists, source_count) SELECT (($1::jsonb)->>'report_id')::uuid, uc.id, ic.rank, ic.cited_by, ic.visibility_score, ic.avg_position, ic.source_count FROM input_companies ic JOIN upsert_companies uc ON uc.nom_normalise = ic.nom_normalise AND COALESCE(uc.domain,'') = COALESCE(ic.domain,'') ON CONFLICT (report_id, company_id) DO NOTHING;",
+        "options": {"queryReplacement": "={{ JSON.stringify({report_id: $('Consolidate (JS)').item.json.report_id, companies: $('Consolidate (JS)').item.json.consolidated.companies}) }}"}
+      },
+      "id": "n_insert_companies",
+      "name": "Upsert companies + report_companies",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2040, 600],
+      "credentials": {"postgres": {"id": "TODO_GEOPERF_POSTGRES_CREDENTIAL", "name": "Supabase GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.reports SET status = 'ready', completed_at = NOW() WHERE id = $1::uuid RETURNING id, status;",
+        "options": {"queryReplacement": "={{ [$('Consolidate (JS)').item.json.report_id] }}"}
+      },
+      "id": "n_finalize",
+      "name": "Mark report as ready",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2280, 600],
+      "credentials": {"postgres": {"id": "TODO_GEOPERF_POSTGRES_CREDENTIAL", "name": "Supabase GEOPERF"}}
+    },
+
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, report_id: $('Consolidate (JS)').item.json.report_id, sous_categorie: $('Consolidate (JS)').item.json.sous_categorie, stats: $('Consolidate (JS)').item.json.consolidated.stats, top_5: $('Consolidate (JS)').item.json.consolidated.companies.slice(0,5).map(c => ({ rank: c.rank_consolidated, name: c.name, visibility: c.visibility_score + '/4' })) } }}",
+        "options": {}
+      },
+      "id": "n_respond",
+      "name": "Webhook response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2520, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {"main": [[{"node": "Extract params", "type": "main", "index": 0}]]},
+    "Extract params": {"main": [[{"node": "Get category from slug", "type": "main", "index": 0}]]},
+    "Get category from slug": {"main": [[{"node": "Create report (status=running)", "type": "main", "index": 0}]]},
+    "Create report (status=running)": {"main": [[{"node": "Prepare context", "type": "main", "index": 0}]]},
+    "Prepare context": {"main": [[
+      {"node": "1. Perplexity Sonar Pro", "type": "main", "index": 0},
+      {"node": "2. GPT-4o search", "type": "main", "index": 0},
+      {"node": "3. Gemini 2.5 Pro", "type": "main", "index": 0},
+      {"node": "4. Claude Sonnet 4.6", "type": "main", "index": 0}
+    ]]},
+    "Model: perplexity/sonar-pro": {"ai_languageModel": [[{"node": "1. Perplexity Sonar Pro", "type": "ai_languageModel", "index": 0}]]},
+    "Model: openai/gpt-4o-search-preview": {"ai_languageModel": [[{"node": "2. GPT-4o search", "type": "ai_languageModel", "index": 0}]]},
+    "Model: google/gemini-2.5-pro": {"ai_languageModel": [[{"node": "3. Gemini 2.5 Pro", "type": "ai_languageModel", "index": 0}]]},
+    "Model: anthropic/claude-sonnet-4.6": {"ai_languageModel": [[{"node": "4. Claude Sonnet 4.6", "type": "ai_languageModel", "index": 0}]]},
+    "1. Perplexity Sonar Pro": {"main": [[{"node": "Merge 4 LLM responses", "type": "main", "index": 0}]]},
+    "2. GPT-4o search":       {"main": [[{"node": "Merge 4 LLM responses", "type": "main", "index": 1}]]},
+    "3. Gemini 2.5 Pro":      {"main": [[{"node": "Merge 4 LLM responses", "type": "main", "index": 2}]]},
+    "4. Claude Sonnet 4.6":   {"main": [[{"node": "Merge 4 LLM responses", "type": "main", "index": 3}]]},
+    "Merge 4 LLM responses": {"main": [[{"node": "Consolidate (JS)", "type": "main", "index": 0}]]},
+    "Consolidate (JS)": {"main": [[{"node": "Insert raw_responses (4 rows)", "type": "main", "index": 0}]]},
+    "Insert raw_responses (4 rows)": {"main": [[{"node": "Upsert companies + report_companies", "type": "main", "index": 0}]]},
+    "Upsert companies + report_companies": {"main": [[{"node": "Mark report as ready", "type": "main", "index": 0}]]},
+    "Mark report as ready": {"main": [[{"node": "Webhook response", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{"name": "geoperf"}, {"name": "phase1"}]
+}

@@ -1,0 +1,11 @@
+<svg width="320" height="120" viewBox="0 0 320 120" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>GEOPERF logo - Editorial/Authority direction</title>
+  <desc>Serif wordmark with amber accent dot, navy + amber palette, institutional positioning.</desc>
+  <g>
+    <text x="20" y="68" font-family="'Times New Roman', 'Source Serif Pro', Georgia, serif" font-size="44" font-weight="500" fill="#042C53" letter-spacing="-1">Ge</text>
+    <circle cx="80" cy="58" r="6" fill="#EF9F27"/>
+    <text x="86" y="68" font-family="'Times New Roman', 'Source Serif Pro', Georgia, serif" font-size="44" font-weight="500" fill="#042C53" letter-spacing="-1">perf</text>
+    <line x1="20" y1="82" x2="200" y2="82" stroke="#042C53" stroke-width="0.8"/>
+    <text x="20" y="100" font-family="-apple-system, 'Inter', sans-serif" font-size="10" font-weight="400" fill="#0C447C" letter-spacing="3">L L M   V I S I B I L I T Y   R E S E A R C H</text>
+  </g>
+</svg>

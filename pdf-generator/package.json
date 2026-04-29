@@ -1,0 +1,15 @@
+{
+  "name": "geoperf-pdf-generator",
+  "version": "0.1.0",
+  "description": "GEOPERF — HTML to PDF generator using Puppeteer",
+  "main": "generate_pdf.js",
+  "scripts": {
+    "start": "node generate_pdf.js"
+  },
+  "dependencies": {
+    "puppeteer": "^23.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

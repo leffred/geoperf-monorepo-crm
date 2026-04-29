@@ -1,0 +1,181 @@
+{
+  "name": "GEOPERF Phase 2 — Apollo Sourcing & Prospect DB",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "geoperf-sourcing",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "n_webhook",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-300, 400],
+      "webhookId": "geoperf-sourcing"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {"id": "1", "name": "report_id", "value": "={{ $json.body.report_id }}", "type": "string"},
+            {"id": "2", "name": "max_per_company", "value": "={{ $json.body.max_per_company || 3 }}", "type": "number"},
+            {"id": "3", "name": "min_lead_score", "value": "={{ $json.body.min_lead_score || 50 }}", "type": "number"}
+          ]
+        },
+        "options": {}
+      },
+      "id": "n_set_params",
+      "name": "Extract params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-60, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.id AS company_id, c.nom, c.domain, c.country, rc.visibility_score, r.id AS report_id, r.category_id FROM public.report_companies rc JOIN public.companies c ON c.id = rc.company_id JOIN public.reports r ON r.id = rc.report_id WHERE r.id = (($1::jsonb)->>'report_id')::uuid AND c.domain IS NOT NULL ORDER BY rc.rank;",
+        "options": {"queryReplacement": "={{ JSON.stringify({report_id: $json.report_id}) }}"}
+      },
+      "id": "n_get_companies",
+      "name": "Get companies from report",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [180, 400],
+      "credentials": {"postgres": {"id": "TODO_POSTGRES_GEOPERF_ID", "name": "Postgres GEOPERF"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop sur companies — pour chaque, on génère un payload Apollo search\nconst max = $('Extract params').item.json.max_per_company;\nconst titles = [\n  'CMO','Chief Marketing Officer','Directeur Marketing',\n  'Head of Marketing','VP Marketing','Director of Marketing',\n  'Head of Brand','Brand Director',\n  'Head of Digital Marketing','Head of Digital',\n  'Director of Communications','Head of Communications','Directeur Communication',\n  'Head of Product Marketing','Director of Product Marketing'\n];\nconst out = [];\nfor (const c of items) {\n  out.push({ json: {\n    company_id: c.json.company_id,\n    company_name: c.json.nom,\n    company_domain: c.json.domain,\n    company_country: c.json.country,\n    visibility_score: c.json.visibility_score,\n    report_id: c.json.report_id,\n    category_id: c.json.category_id,\n    apollo_payload: {\n      q_organization_domains: [c.json.domain],\n      person_titles: titles,\n      person_seniorities: ['c_suite','vp','director','head'],\n      person_departments: ['marketing','c_suite'],\n      page: 1,\n      per_page: max * 4\n    }\n  } });\n}\nreturn out;"
+      },
+      "id": "n_build_searches",
+      "name": "Build Apollo searches (per company)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [420, 400]
+    },
+    {
+      "parameters": {},
+      "id": "n_split",
+      "name": "Split per company",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/mixed_people/api_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Cache-Control", "value": "no-cache"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.apollo_payload) }}",
+        "options": {"timeout": 30000}
+      },
+      "id": "n_apollo_search",
+      "name": "Apollo people search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400],
+      "credentials": {
+        "httpHeaderAuth": {"id": "TODO_APOLLO_API_KEY_HEADER", "name": "Apollo API Key"}
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter + map Apollo results to prospects rows\nconst src = $('Split per company').item.json;\nconst people = (items[0].json.people || items[0].json.contacts || []);\nconst max = $('Extract params').item.json.max_per_company;\n\n// Scoring\nfunction scoreLead(p, visibilityScore) {\n  let s = 0;\n  if (p.email_status === 'verified' || p.email_verified) s += 30;\n  if (p.linkedin_url) s += 15;\n  const t = (p.title || '').toLowerCase();\n  if (/(cmo|chief marketing officer)/.test(t)) s += 25;\n  else if (/(head of brand|head of digital)/.test(t)) s += 15;\n  else if (/(vp marketing|director of marketing|directeur marketing)/.test(t)) s += 10;\n  if (visibilityScore === 4) s += 15;\n  else if (visibilityScore === 3) s += 10;\n  else if (visibilityScore === 2) s += 5;\n  return s;\n}\n\nconst rows = people\n  .filter(p => p.first_name && p.last_name)\n  .map(p => {\n    const score = scoreLead(p, src.visibility_score);\n    return {\n      company_id: src.company_id,\n      category_id: src.category_id,\n      report_id: src.report_id,\n      apollo_person_id: p.id,\n      first_name: p.first_name,\n      last_name: p.last_name,\n      full_name: p.name || `${p.first_name} ${p.last_name}`,\n      email: p.email,\n      email_verified: p.email_status === 'verified' || !!p.email_verified,\n      phone: p.phone_numbers?.[0]?.sanitized_number || null,\n      linkedin_url: p.linkedin_url,\n      title: p.title,\n      seniority: p.seniority,\n      job_function: p.departments?.[0] || null,\n      lead_score: score,\n      metadata: {\n        apollo_org_id: p.organization?.id,\n        apollo_org_website: p.organization?.website_url,\n        company_country: src.company_country,\n        company_visibility_score: src.visibility_score\n      }\n    };\n  })\n  .sort((a, b) => b.lead_score - a.lead_score)\n  .slice(0, max);\n\nreturn rows.map(r => ({ json: r }));"
+      },
+      "id": "n_score_filter",
+      "name": "Score & filter (top N per company)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.prospects (company_id, category_id, report_id, apollo_person_id, first_name, last_name, full_name, email, email_verified, phone, linkedin_url, title, seniority, job_function, lead_score, metadata) VALUES ((($1::jsonb)->>'company_id')::uuid, (($1::jsonb)->>'category_id')::uuid, (($1::jsonb)->>'report_id')::uuid, ($1::jsonb)->>'apollo_person_id', ($1::jsonb)->>'first_name', ($1::jsonb)->>'last_name', ($1::jsonb)->>'full_name', ($1::jsonb)->>'email', (($1::jsonb)->>'email_verified')::boolean, ($1::jsonb)->>'phone', ($1::jsonb)->>'linkedin_url', ($1::jsonb)->>'title', ($1::jsonb)->>'seniority', ($1::jsonb)->>'job_function', (($1::jsonb)->>'lead_score')::int, ($1::jsonb)->'metadata') ON CONFLICT (apollo_person_id) DO UPDATE SET lead_score = EXCLUDED.lead_score, email = EXCLUDED.email, email_verified = EXCLUDED.email_verified, phone = EXCLUDED.phone, title = EXCLUDED.title, metadata = EXCLUDED.metadata, updated_at = NOW() RETURNING id, tracking_token, lead_score, status;",
+        "options": {"queryReplacement": "={{ JSON.stringify($json) }}"}
+      },
+      "id": "n_upsert_prospect",
+      "name": "Upsert prospect in Supabase",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1380, 400],
+      "credentials": {"postgres": {"id": "TODO_POSTGRES_GEOPERF_ID", "name": "Postgres GEOPERF"}}
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.prospect_events (prospect_id, event_type, channel, direction, metadata) VALUES ((($1::jsonb)->>'prospect_id')::uuid, 'prospect_created', 'system', 'system', $1::jsonb);",
+        "options": {"queryReplacement": "={{ JSON.stringify({prospect_id: $json.id, source: 'apollo_sourcing_workflow', lead_score: $json.lead_score}) }}"}
+      },
+      "id": "n_log_event",
+      "name": "Log prospect_created event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1620, 400],
+      "credentials": {"postgres": {"id": "TODO_POSTGRES_GEOPERF_ID", "name": "Postgres GEOPERF"}}
+    },
+    {
+      "parameters": {
+        "jsCode": "// Toujours retourner au moins 1 item pour que splitInBatches sache qu'il doit continuer.\n// Sinon : si Apollo retourne 0 (cas plan free), Score & filter renvoie [], Upsert et Log ne s'executent pas, et le loop s'arrete prematurement.\nreturn [{ json: { __continue: true, processed_at: new Date().toISOString() } }];"
+      },
+      "id": "n_loop_back",
+      "name": "Continue loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1860, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH agg AS (SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE email_verified) AS verified, ROUND(AVG(lead_score)::numeric, 1) AS avg_score, COUNT(*) FILTER (WHERE lead_score >= (($1::jsonb)->>'min_lead_score')::int) AS sequence_a_eligible FROM public.prospects WHERE report_id = (($1::jsonb)->>'report_id')::uuid), by_co AS (SELECT json_agg(json_build_object('company', c.nom, 'count', sub.cnt) ORDER BY sub.cnt DESC) AS by_company FROM (SELECT company_id, COUNT(*) AS cnt FROM public.prospects WHERE report_id = (($1::jsonb)->>'report_id')::uuid GROUP BY company_id) sub JOIN public.companies c ON c.id = sub.company_id) SELECT json_build_object('total', agg.total, 'verified', agg.verified, 'avg_score', agg.avg_score, 'sequence_a_eligible', agg.sequence_a_eligible, 'by_company', COALESCE(by_co.by_company, '[]'::json)) AS summary FROM agg, by_co;",
+        "options": {"queryReplacement": "={{ JSON.stringify({report_id: $('Extract params').item.json.report_id, min_lead_score: $('Extract params').item.json.min_lead_score}) }}"}
+      },
+      "id": "n_summary",
+      "name": "Build summary",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [2100, 400],
+      "credentials": {"postgres": {"id": "TODO_POSTGRES_GEOPERF_ID", "name": "Postgres GEOPERF"}}
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, report_id: $('Extract params').item.json.report_id, summary: $json.summary } }}",
+        "options": {}
+      },
+      "id": "n_respond",
+      "name": "Webhook response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2340, 400]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger":              {"main": [[{"node": "Extract params", "type": "main", "index": 0}]]},
+    "Extract params":               {"main": [[{"node": "Get companies from report", "type": "main", "index": 0}]]},
+    "Get companies from report":    {"main": [[{"node": "Build Apollo searches (per company)", "type": "main", "index": 0}]]},
+    "Build Apollo searches (per company)": {"main": [[{"node": "Split per company", "type": "main", "index": 0}]]},
+    "Split per company":            {"main": [[{"node": "Build summary", "type": "main", "index": 0}], [{"node": "Apollo people search", "type": "main", "index": 0}]]},
+    "Apollo people search":         {"main": [[{"node": "Score & filter (top N per company)", "type": "main", "index": 0}, {"node": "Continue loop", "type": "main", "index": 0}]]},
+    "Score & filter (top N per company)": {"main": [[{"node": "Upsert prospect in Supabase", "type": "main", "index": 0}]]},
+    "Upsert prospect in Supabase":  {"main": [[{"node": "Log prospect_created event", "type": "main", "index": 0}]]},
+    "Continue loop":                {"main": [[{"node": "Split per company", "type": "main", "index": 0}]]},
+    "Build summary":                {"main": [[{"node": "Webhook response", "type": "main", "index": 0}]]}
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [{"name": "geoperf"}, {"name": "phase2"}, {"name": "apollo"}, {"name": "sourcing"}]
+}

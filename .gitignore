@@ -1,0 +1,31 @@
+# Frontend (repo séparé : leffred/geoperf-landing)
+landing/
+
+# Claude Code local settings (peut contenir des permissions/path absolus)
+.claude/settings.local.json
+
+# Node
+node_modules/
+*.log
+npm-debug.log*
+
+# Env / secrets
+.env
+.env.*
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# Build artefacts pdf-generator
+pdf-generator/node_modules/
+pdf-generator/output/

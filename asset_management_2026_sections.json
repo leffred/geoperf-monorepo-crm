@@ -1,0 +1,108 @@
+{
+  "executive_summary": "Le marché de l'asset management 2026 révèle une concentration extrême : les quatre géants (BlackRock, Vanguard, Fidelity, State Street) captent 100% de la visibilité IA, tandis que 7 acteurs majeurs restent invisibles aux modèles dominants. Cette fragmentation de la reconnaissance IA—4 sociétés citées par 2/4 LLM, 7 par 1/4 seulement—signale un risque stratégique majeur pour les challengers européens et spécialisés. Les absences de Perplexity et Gemini amplifient cette distorsion, créant une hiérarchie IA déconnectée des réalités de marché où PIMCO, Amundi et Capital Group demeurent des références sectorielles majeures.",
+  "methodology": "Cette étude analyse la visibilité IA de 11 acteurs majeurs de l'asset management via interrogation de 4 LLM : OpenAI (ChatGPT), Anthropic (Claude), Perplexity et Google Gemini. Seuls OpenAI et Anthropic ont fourni réponses structurées. Les critères d'évaluation : citation directe, profondeur descriptive, positionnement stratégique. La visibilité est codifiée sur deux niveaux : Tier-1 (cité par 2/4 LLM) et Tier-2 (cité par 1/4). Les absences de Perplexity et Gemini révèlent des biais de training-data et des stratégies d'indexation divergentes, impactant la représentation sectorielle globale.",
+  "sector_overview": "L'asset management global gère ~$130 trillions d'actifs en 2026, dominé par trois modèles : gestion passive (BlackRock/Vanguard), gestion active diversifiée (Fidelity/State Street) et spécialisation thématique (PIMCO en obligataire, Amundi en Europe). La consolidation s'accélère post-2023 : fusions cross-border, intégration IA/ESG, automatisation des workflows. Les challengers européens (Amundi) et spécialisés (PIMCO, Capital Group) maintiennent des parts de marché significatives via expertise métier. La fragmentation géographique persiste : 9/11 sociétés basées aux États-Unis, 1 en France, 1 en Allemagne. Les enjeux 2026 : régulation ESG, transition climatique, cybersécurité, talent acquisition en data science.",
+  "ai_visibility_analysis": "La pyramide de visibilité IA révèle une distorsion majeure : Tier-1 (4 sociétés, 36%) concentre 100% de la reconnaissance multi-LLM, tandis que Tier-2 (7 sociétés, 64%) demeure fragmentée et monocanal. Les quatre leaders (BlackRock, Vanguard, Fidelity, State Street) bénéficient d'une double citation (OpenAI + Anthropic), créant un effet de légitimité IA disproportionné. Les challengers—Morgan Stanley, JPMorgan AM, Goldman Sachs AM, Amundi, Capital Group, PIMCO, AllianzGI—apparaissent via un seul LLM, généralement Anthropic. Cette hiérarchie a trois conséquences pour les CMO : (1) risque de sous-représentation médiatique des spécialistes, (2) biais algorithmique renforçant la concentration perçue, (3) opportunité pour les Tier-2 de capitaliser sur la « découverte » via recherche spécialisée. L'absence de Perplexity et Gemini amplifie cette polarisation, suggérant des training-sets distincts et des priorités d'indexation divergentes.",
+  "top_companies_summary": [
+    {
+      "rank": 1,
+      "name": "BlackRock",
+      "one_liner": "Leader mondial, $10.6T AUM, solutions passives/actives/alternatives.",
+      "ai_visibility_note": "Tier-1 : cité par OpenAI et Anthropic, reconnaissance maximale.",
+      "context_note": "Domination par effet de taille et couverture médiatique massive pré-training IA."
+    },
+    {
+      "rank": 2,
+      "name": "Vanguard Group",
+      "one_liner": "Leader passif, $8.7T AUM, ETF et fonds indiciels de référence.",
+      "ai_visibility_note": "Tier-1 : cité par OpenAI et Anthropic, visibilité équivalente à BlackRock.",
+      "context_note": "Reconnaissance liée au modèle d'investisseur-propriétaire et à la domination passive."
+    },
+    {
+      "rank": 3,
+      "name": "Fidelity Investments",
+      "one_liner": "Conglomérat financier, $13.1T AUM, services retail/institutional diversifiés.",
+      "ai_visibility_note": "Tier-1 : cité par OpenAI et Anthropic, reconnaissance multi-canal.",
+      "context_note": "Visibilité amplifiée par présence retail massive et couverture médiatique cross-secteur."
+    },
+    {
+      "rank": 4,
+      "name": "State Street Global Advisors",
+      "one_liner": "Gestionnaire passif/actif, $4.1T AUM, solutions institutionnelles.",
+      "ai_visibility_note": "Tier-1 : cité par OpenAI et Anthropic, reconnaissance équivalente aux trois premiers.",
+      "context_note": "Bénéficie du statut de custodian global et de la couverture financière mainstream."
+    },
+    {
+      "rank": 5,
+      "name": "Morgan Stanley",
+      "one_liner": "Banque d'investissement, $2.3T AUM asset management, services intégrés.",
+      "ai_visibility_note": "Tier-2 : cité par OpenAI uniquement, visibilité monocanal.",
+      "context_note": "Reconnaissance via banque d'investissement plutôt que pure asset management."
+    },
+    {
+      "rank": 6,
+      "name": "JPMorgan Asset Management",
+      "one_liner": "Division JPMorgan, $2.8T AUM, solutions actives/passives/alternatives.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance fragmentée.",
+      "context_note": "Sous-représenté malgré taille significative, bénéficie de parent JPMorgan."
+    },
+    {
+      "rank": 7,
+      "name": "Goldman Sachs Asset Management (GSAM)",
+      "one_liner": "Division Goldman Sachs, $2.5T AUM, stratégies alternatives et solutions.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance monocanal.",
+      "context_note": "Visibilité limitée malgré expertise en alternatives et stratégies sophistiquées."
+    },
+    {
+      "rank": 8,
+      "name": "Amundi",
+      "one_liner": "Leader européen, €2.1T AUM, fusion Crédit Agricole-Société Générale.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance fragmentée.",
+      "context_note": "Sous-représenté en IA malgré statut de leader régional et taille globale."
+    },
+    {
+      "rank": 9,
+      "name": "Capital Group",
+      "one_liner": "Gestionnaire actif indépendant, $2.9T AUM, American Funds de référence.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance monocanal.",
+      "context_note": "Expertise active reconnue mais invisibilité IA contraste avec influence métier."
+    },
+    {
+      "rank": 10,
+      "name": "PIMCO",
+      "one_liner": "Leader obligataire mondial, $2.3T AUM, filiale Allianz, stratégies alternatives.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance fragmentée.",
+      "context_note": "Référence sectorielle en fixed income mais sous-représentée dans training IA."
+    },
+    {
+      "rank": 11,
+      "name": "Allianz Global Investors (AllianzGI)",
+      "one_liner": "Gestionnaire Allianz, €0.8T AUM, actions/obligations/alternatives spécialisées.",
+      "ai_visibility_note": "Tier-2 : cité par Anthropic uniquement, reconnaissance monocanal.",
+      "context_note": "Visibilité limitée malgré intégration groupe Allianz et expertise régionale."
+    }
+  ],
+  "insights_and_recommendations": [
+    {
+      "title": "Biais de concentration IA vs. réalité de marché",
+      "body": "La visibilité IA sur-représente les quatre géants (36% des acteurs, 100% de la reconnaissance multi-LLM) tandis que les spécialistes (PIMCO, Capital Group) et leaders régionaux (Amundi) restent invisibles. Les CMO doivent corriger ce biais en diversifiant les sources d'intelligence : rapports sectoriels, données propriétaires, interviews d'experts. La reconnaissance IA ne reflète pas l'influence métier réelle."
+    },
+    {
+      "title": "Fragmentation des training-sets LLM : risque de désinformation",
+      "body": "L'absence de Perplexity et Gemini, combinée à la monocanal Tier-2, révèle des training-sets divergents. Anthropic cite 7 acteurs Tier-2 (vs. OpenAI : 1 seul), suggérant des stratégies d'indexation distinctes. Pour les stratèges, cela implique : (1) tester plusieurs LLM avant décision, (2) valider via sources primaires, (3) anticiper l'évolution des biais IA dans les 12 prochains mois."
+    },
+    {
+      "title": "Opportunité pour les Tier-2 : capitaliser sur la spécialisation",
+      "body": "Les 7 acteurs Tier-2 peuvent transformer leur invisibilité IA en avantage compétitif en positionnant l'expertise métier (PIMCO en obligataire, Amundi en ESG européen) comme différenciant. Stratégie : créer du contenu technique, publier research, engager les communautés spécialisées. L'IA généraliste favorise les géants ; la spécialisation crée des niches de valeur."
+    },
+    {
+      "title": "Implications pour la stratégie de contenu 2026",
+      "body": "Les Tier-1 doivent défendre leur positionnement via thought leadership et innovation IA. Les Tier-2 doivent investir en SEO technique et contenu spécialisé pour émerger dans les recherches verticales. Les CMO doivent adapter le messaging : Tier-1 = leadership global, Tier-2 = expertise métier. La fragmentation IA crée une opportunité de repositionnement pour les challengers."
+    },
+    {
+      "title": "Recommandation : audit IA trimestriel pour le secteur",
+      "body": "Mettre en place un suivi trimestriel de la visibilité IA (4+ LLM, 20+ requêtes par acteur) pour détecter les shifts de reconnaissance. Cet audit permettra d'anticiper les évolutions de training-data et d'adapter les stratégies de contenu. Les données 2026 montrent une volatilité élevée ; la surveillance continue est critique pour maintenir la pertinence."
+    }
+  ],
+  "about_geoperf": "Geoperf est une plateforme d'intelligence sectorielle fondée par Jourdechance SAS (SIREN 838 114 619). Spécialisée en études institutionnelles de marché, Geoperf analyse la visibilité, la compétitivité et la stratégie des acteurs majeurs via méthodologies propriétaires combinant IA, data mining et expertise métier. Nos rapports servent les stratèges, CMO et décideurs financiers."
+}
