@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "language": "fr",
+  "system_prompt": "Tu es un assistant expert chargé de répondre aux questions des décideurs marketing B2B en français. Tu donnes des réponses factuelles, naturelles et utiles, comme si tu conseillais un dirigeant qui prend une décision réelle.\n\nRègles :\n1. Cite les sociétés par leur nom officiel (ex: \"BNP Paribas Asset Management\" et non \"BNP\").\n2. Si tu listes plusieurs sociétés, utilise une liste numérotée (1. ... 2. ... etc.) — même classement implicite si la question l''exige.\n3. N''invente jamais une société ou une source. Si tu hésites, retire l''information.\n4. Si tu utilises le web, cite tes sources avec leur URL complète.\n5. Termine TOUJOURS ta réponse par une section \"Sources :\" listant les URLs que tu as effectivement utilisées (une URL par ligne). Si tu n''as pas de source, écris \"Sources : aucune.\"\n\nFormat général :\n- Réponse en français\n- Pas de markdown lourd, du texte courant + listes numérotées\n- 200 à 500 mots maximum\n- Section \"Sources :\" en fin",
+  "prompts": [
+    { "id": "direct_01", "category": "direct_search", "uses_brand": false, "template": "Quelles sont les meilleures sociétés de {category} en France en 2026 ?" },
+    { "id": "direct_02", "category": "direct_search", "uses_brand": false, "template": "Top 10 mondial des leaders du {category} aujourd''hui, avec une phrase de contexte par société." },
+    { "id": "direct_03", "category": "direct_search", "uses_brand": false, "template": "Quels acteurs dominent le marché du {category} en Europe ?" },
+    { "id": "direct_04", "category": "direct_search", "uses_brand": false, "template": "Liste les sociétés les plus respectées en {category} avec leurs spécificités principales." },
+    { "id": "direct_05", "category": "direct_search", "uses_brand": false, "template": "Qui sont les leaders historiques du {category} et qui sont les nouveaux entrants ?" },
+    { "id": "direct_06", "category": "direct_search", "uses_brand": false, "template": "Classement des entreprises {category} par taille / parts de marché." },
+    { "id": "direct_07", "category": "direct_search", "uses_brand": false, "template": "Quels {category} sont reconnus pour leur capacité d''innovation ces 3 dernières années ?" },
+    { "id": "direct_08", "category": "direct_search", "uses_brand": false, "template": "Quelles sont les références incontournables du {category} pour un client institutionnel ?" },
+    { "id": "direct_09", "category": "direct_search", "uses_brand": false, "template": "Top 5 des marques de {category} les plus reconnues sur le web et les médias spécialisés." },
+    { "id": "direct_10", "category": "direct_search", "uses_brand": false, "template": "Quelles sont les sociétés de {category} les plus recommandées par la presse financière et les analystes (Forrester, Gartner, etc.) ?" },
+
+    { "id": "usecase_01", "category": "use_case", "uses_brand": false, "template": "Je dirige une PME française de 200 personnes et je cherche un partenaire {category} fiable. Lesquels recommanderais-tu ?" },
+    { "id": "usecase_02", "category": "use_case", "uses_brand": false, "template": "C''est la première fois que je dois choisir un {category} pour mon entreprise. Quelles sociétés consulter en priorité, et comment les évaluer ?" },
+    { "id": "usecase_03", "category": "use_case", "uses_brand": false, "template": "Quelle société de {category} est la plus adaptée pour un client multinational avec des besoins en Europe, US et Asie ?" },
+    { "id": "usecase_04", "category": "use_case", "uses_brand": false, "template": "Pour optimiser mes coûts en {category} sans sacrifier la qualité, vers quels acteurs me tourner ?" },
+    { "id": "usecase_05", "category": "use_case", "uses_brand": false, "template": "Je dois lancer un appel d''offres en {category} pour un projet stratégique. Quels sont les acteurs sérieux à inviter ?" },
+    { "id": "usecase_06", "category": "use_case", "uses_brand": false, "template": "Quels {category} ont la meilleure réputation pour la satisfaction client et le service après-vente ?" },
+    { "id": "usecase_07", "category": "use_case", "uses_brand": false, "template": "Je recherche un {category} avec une présence et une expertise fortes en Europe continentale. Lesquels me recommandes-tu ?" },
+    { "id": "usecase_08", "category": "use_case", "uses_brand": false, "template": "Comment évaluer la solidité d''un {category} ? Et donne-moi 3 à 5 exemples de sociétés que tu considères comme des références." },
+    { "id": "usecase_09", "category": "use_case", "uses_brand": false, "template": "Pour une entreprise qui veut centraliser tous ses besoins en {category} chez un prestataire unique, quel(s) acteur(s) ont la couverture la plus large ?" },
+    { "id": "usecase_10", "category": "use_case", "uses_brand": false, "template": "Quels {category} sont aujourd''hui reconnus pour leur expertise ESG, durabilité et impact ?" },
+
+    { "id": "comp_01", "category": "competitive", "uses_brand": false, "template": "Quels sont les principaux concurrents de {competitors[0]} dans le {category} ?" },
+    { "id": "comp_02", "category": "competitive", "uses_brand": false, "template": "Comparaison entre {competitors[0]} et {competitors[1]} en {category} : forces, faiblesses, positionnement." },
+    { "id": "comp_03", "category": "competitive", "uses_brand": false, "template": "Quelles alternatives sérieuses à {competitors[0]} pour un client B2B en {category} ?" },
+    { "id": "comp_04", "category": "competitive", "uses_brand": true,  "template": "Quelles alternatives à {brand} en {category} ? Cite 5 sociétés concurrentes avec leurs spécificités." },
+    { "id": "comp_05", "category": "competitive", "uses_brand": false, "template": "Je travaille avec {competitors[0]}, mais je souhaite diversifier mon portefeuille. Quelles sociétés équivalentes me suggères-tu en {category} ?" },
+    { "id": "comp_06", "category": "competitive", "uses_brand": false, "template": "{competitors[0]} vs {competitors[1]} en {category} : laquelle est la plus pertinente pour un grand compte ?" },
+    { "id": "comp_07", "category": "competitive", "uses_brand": false, "template": "Quelles entreprises rivalisent directement avec {competitors[0]} en {category} aujourd''hui, en France et à l''international ?" },
+    { "id": "comp_08", "category": "competitive", "uses_brand": false, "template": "Si tu devais identifier un challenger sérieux à {competitors[0]} en {category}, qui serait-ce et pourquoi ?" },
+    { "id": "comp_09", "category": "competitive", "uses_brand": true,  "template": "Top 5 des sociétés à considérer face à {brand} en {category}, avec un argumentaire pour chacune." },
+    { "id": "comp_10", "category": "competitive", "uses_brand": true,  "template": "{brand} a-t-elle des concurrents qui la dépassent en {category} sur certains segments ? Si oui, lesquels et sur quel critère ?" }
+  ]
+}

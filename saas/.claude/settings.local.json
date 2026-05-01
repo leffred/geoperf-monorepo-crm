@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Supabase__list_migrations",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "mcp__claude_ai_Supabase__list_tables",
+      "Bash(mkdir -p C:/Users/lefeb/Documents/Claude/Projects/GEOPERF/supabase/functions/saas_run_brand_snapshot)",
+      "Bash(cp C:/Users/lefeb/Documents/Claude/Projects/GEOPERF/saas/prompts/brand_monitoring/prompts.json C:/Users/lefeb/Documents/Claude/Projects/GEOPERF/supabase/functions/saas_run_brand_snapshot/prompts.json)",
+      "Bash(npm run *)",
+      "Bash(npm install *)"
+    ]
+  }
+}
