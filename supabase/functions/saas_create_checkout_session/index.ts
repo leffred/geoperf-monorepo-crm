@@ -1,6 +1,9 @@
 // GEOPERF SaaS — Crée une Stripe Checkout Session pour upgrade
 // Spec : saas/SPEC.md section 7.2
-// Trigger : POST {tier: 'solo'|'pro'|'agency'} avec Authorization: Bearer <user JWT>
+// Trigger : POST {tier, billing_cycle?, trial?} avec Authorization: Bearer <user JWT>
+//   - tier : 'starter' | 'growth' | 'pro' | 'agency' (legacy 'solo' = alias starter)
+//   - billing_cycle : 'monthly' (default) | 'annual' (-20%, S13)
+//   - trial : true → 14 jours gratuits sur Pro uniquement (S13)
 // Output : {checkout_url}
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -12,15 +15,23 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
-// S7 (2026-04-30) : grille à 5 tiers. STRIPE_PRICE_SOLO conservé en alias starter
-// pour les comptes legacy avant migration tier 'solo' → 'starter'.
-const TIER_TO_PRICE: Record<string, string | undefined> = {
-  starter: Deno.env.get("STRIPE_PRICE_STARTER") ?? Deno.env.get("STRIPE_PRICE_SOLO"),
-  growth:  Deno.env.get("STRIPE_PRICE_GROWTH"),
-  pro:     Deno.env.get("STRIPE_PRICE_PRO"),
-  agency:  Deno.env.get("STRIPE_PRICE_AGENCY"),
-  // Legacy : un user qui aurait l'ancien tier 'solo' demandé checkout = on l'envoie vers Starter
-  solo:    Deno.env.get("STRIPE_PRICE_STARTER") ?? Deno.env.get("STRIPE_PRICE_SOLO"),
+// S7 (2026-04-30) : grille à 5 tiers + S13 (2026-05-01) : annual -20%
+// Map tier+cycle → STRIPE_PRICE_* env var
+const TIER_CYCLE_TO_PRICE: Record<string, Record<string, string | undefined>> = {
+  monthly: {
+    starter: Deno.env.get("STRIPE_PRICE_STARTER") ?? Deno.env.get("STRIPE_PRICE_SOLO"),
+    growth:  Deno.env.get("STRIPE_PRICE_GROWTH"),
+    pro:     Deno.env.get("STRIPE_PRICE_PRO"),
+    agency:  Deno.env.get("STRIPE_PRICE_AGENCY"),
+    solo:    Deno.env.get("STRIPE_PRICE_STARTER") ?? Deno.env.get("STRIPE_PRICE_SOLO"),
+  },
+  annual: {
+    starter: Deno.env.get("STRIPE_PRICE_STARTER_YEARLY"),
+    growth:  Deno.env.get("STRIPE_PRICE_GROWTH_YEARLY"),
+    pro:     Deno.env.get("STRIPE_PRICE_PRO_YEARLY"),
+    agency:  Deno.env.get("STRIPE_PRICE_AGENCY_YEARLY"),
+    solo:    Deno.env.get("STRIPE_PRICE_STARTER_YEARLY"),
+  },
 };
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://geoperf.com";
@@ -44,9 +55,15 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
-  const { tier } = await req.json().catch(() => ({}));
-  const priceId = TIER_TO_PRICE[tier];
-  if (!priceId) return new Response("Invalid tier", { status: 400 });
+  const { tier, billing_cycle = "monthly", trial = false } = await req.json().catch(() => ({}));
+  if (billing_cycle !== "monthly" && billing_cycle !== "annual") {
+    return new Response("Invalid billing_cycle (must be 'monthly' or 'annual')", { status: 400 });
+  }
+  const priceId = TIER_CYCLE_TO_PRICE[billing_cycle]?.[tier];
+  if (!priceId) return new Response(`Invalid tier '${tier}' for cycle '${billing_cycle}'`, { status: 400 });
+
+  // Trial 14 jours réservé au tier Pro (S13)
+  const trialDays = (trial === true && tier === "pro") ? 14 : undefined;
 
   // Récupère ou crée le Stripe customer pour ce user
   const adminClient = createClient(
@@ -82,9 +99,10 @@ Deno.serve(async (req) => {
     success_url: `${APP_URL}/app/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${APP_URL}/app/billing?canceled=true`,
     automatic_tax: { enabled: true },
-    metadata: { user_id: user.id, tier },
+    metadata: { user_id: user.id, tier, billing_cycle, trial: String(!!trialDays) },
     subscription_data: {
-      metadata: { user_id: user.id, tier },
+      metadata: { user_id: user.id, tier, billing_cycle },
+      ...(trialDays ? { trial_period_days: trialDays } : {}),
     },
   });
 

@@ -28,15 +28,23 @@ const supabase = createClient(
   { auth: { persistSession: false } }
 );
 
-// Map Stripe price_id → tier (env-driven pour permettre test/live switch)
-// S7 : 4 tiers payants (starter/growth/pro/agency). Legacy STRIPE_PRICE_SOLO mappé sur 'starter'.
-function priceIdToTier(priceId: string): "starter" | "growth" | "pro" | "agency" | null {
-  if (priceId === Deno.env.get("STRIPE_PRICE_STARTER")) return "starter";
-  if (priceId === Deno.env.get("STRIPE_PRICE_GROWTH")) return "growth";
-  if (priceId === Deno.env.get("STRIPE_PRICE_PRO")) return "pro";
-  if (priceId === Deno.env.get("STRIPE_PRICE_AGENCY")) return "agency";
-  // Legacy
-  if (priceId === Deno.env.get("STRIPE_PRICE_SOLO")) return "starter";
+// Map Stripe price_id → {tier, billing_cycle}
+// S7 (2026-04-30) : 4 tiers payants (starter/growth/pro/agency)
+// S13 (2026-05-01) : ajout des yearly prices (-20%)
+type TierResolution = { tier: "starter" | "growth" | "pro" | "agency"; billing_cycle: "monthly" | "annual" };
+function resolveTierFromPriceId(priceId: string): TierResolution | null {
+  // Monthly
+  if (priceId === Deno.env.get("STRIPE_PRICE_STARTER")) return { tier: "starter", billing_cycle: "monthly" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_GROWTH"))  return { tier: "growth",  billing_cycle: "monthly" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_PRO"))     return { tier: "pro",     billing_cycle: "monthly" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_AGENCY"))  return { tier: "agency",  billing_cycle: "monthly" };
+  // Yearly (S13)
+  if (priceId === Deno.env.get("STRIPE_PRICE_STARTER_YEARLY")) return { tier: "starter", billing_cycle: "annual" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_GROWTH_YEARLY"))  return { tier: "growth",  billing_cycle: "annual" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_PRO_YEARLY"))     return { tier: "pro",     billing_cycle: "annual" };
+  if (priceId === Deno.env.get("STRIPE_PRICE_AGENCY_YEARLY"))  return { tier: "agency",  billing_cycle: "annual" };
+  // Legacy STRIPE_PRICE_SOLO mappé sur starter monthly
+  if (priceId === Deno.env.get("STRIPE_PRICE_SOLO")) return { tier: "starter", billing_cycle: "monthly" };
   return null;
 }
 
@@ -49,8 +57,8 @@ function mapStripeStatus(s: string): "active" | "past_due" | "canceled" | "incom
 
 async function upsertSubscription(stripeSub: Stripe.Subscription, userId: string) {
   const priceId = stripeSub.items.data[0]?.price?.id ?? null;
-  const tier = priceId ? priceIdToTier(priceId) : null;
-  if (!tier) {
+  const resolution = priceId ? resolveTierFromPriceId(priceId) : null;
+  if (!resolution) {
     console.warn(`Unknown price_id ${priceId} for sub ${stripeSub.id}, skipping`);
     return;
   }
@@ -60,7 +68,8 @@ async function upsertSubscription(stripeSub: Stripe.Subscription, userId: string
     .upsert(
       {
         user_id: userId,
-        tier,
+        tier: resolution.tier,
+        billing_cycle: resolution.billing_cycle,
         status: mapStripeStatus(stripeSub.status),
         stripe_subscription_id: stripeSub.id,
         stripe_price_id: priceId,
