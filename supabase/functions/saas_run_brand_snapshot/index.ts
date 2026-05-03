@@ -107,7 +107,21 @@ interface ParsedResponse {
   brand_mentioned: boolean;
   brand_rank: number | null;
   competitors_mentioned: string[];
+  competitors_with_rank: { name: string; rank: number | null }[];
   sources_cited: { url: string; domain: string }[];
+}
+
+// Cherche le 1er numéro de ligne ordonnée ("1. foo", "2) foo", "3- foo") qui matche
+// au moins une des regexes fournies. Retourne null si aucune ligne ne matche.
+function findRankInLines(lines: string[], regexes: RegExp[]): number | null {
+  for (const line of lines) {
+    const m = line.match(/^\s*(\d+)[.)\-]\s+(.+)$/);
+    if (!m) continue;
+    if (regexes.some(re => re.test(m[2]))) {
+      return parseInt(m[1], 10);
+    }
+  }
+  return null;
 }
 
 function parseResponse(text: string, brandName: string, brandDomain: string, competitorHumans: string[]): ParsedResponse {
@@ -119,22 +133,17 @@ function parseResponse(text: string, brandName: string, brandDomain: string, com
 
   const brandMentioned = tokenRegexes.some(re => re.test(text));
 
-  let brandRank: number | null = null;
   const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    const m = line.match(/^\s*(\d+)[.)]\s+(.+)$/);
-    if (!m) continue;
-    if (tokenRegexes.some(re => re.test(m[2]))) {
-      brandRank = parseInt(m[1], 10);
-      break;
-    }
-  }
+  const brandRank = findRankInLines(lines, tokenRegexes);
 
   const competitorsMentioned: string[] = [];
+  const competitorsWithRank: { name: string; rank: number | null }[] = [];
   for (const c of competitorHumans) {
     if (!c) continue;
-    if (new RegExp(`\\b${escapeRegex(c)}\\b`, "i").test(text)) {
+    const re = new RegExp(`\\b${escapeRegex(c)}\\b`, "i");
+    if (re.test(text)) {
       competitorsMentioned.push(c);
+      competitorsWithRank.push({ name: c, rank: findRankInLines(lines, [re]) });
     }
   }
 
@@ -150,7 +159,13 @@ function parseResponse(text: string, brandName: string, brandDomain: string, com
     } catch { /* skip */ }
   }
 
-  return { brand_mentioned: brandMentioned, brand_rank: brandRank, competitors_mentioned: competitorsMentioned, sources_cited: sources };
+  return {
+    brand_mentioned: brandMentioned,
+    brand_rank: brandRank,
+    competitors_mentioned: competitorsMentioned,
+    competitors_with_rank: competitorsWithRank,
+    sources_cited: sources,
+  };
 }
 
 // ============== LLM CLIENT ==============
@@ -219,9 +234,14 @@ function aggregate(responses: ResponseRow[]): {
   citation_rate: number;
   share_of_voice: number;
   total_cost_usd: number;
+  brand_mention_count: number;
+  total_mention_count: number;
 } {
   const n = responses.length;
-  if (n === 0) return { visibility_score: 0, avg_rank: null, citation_rate: 0, share_of_voice: 0, total_cost_usd: 0 };
+  if (n === 0) return {
+    visibility_score: 0, avg_rank: null, citation_rate: 0, share_of_voice: 0,
+    total_cost_usd: 0, brand_mention_count: 0, total_mention_count: 0,
+  };
 
   let scoreSum = 0;
   let mentionedCount = 0;
@@ -255,6 +275,8 @@ function aggregate(responses: ResponseRow[]): {
     citation_rate: round2((mentionedCount / n) * 100),
     share_of_voice: totalMentions > 0 ? round2((brandMentions / totalMentions) * 100) : 0,
     total_cost_usd: Math.round(totalCost * 10000) / 10000,
+    brand_mention_count: brandMentions,
+    total_mention_count: totalMentions,
   };
 }
 
@@ -381,6 +403,7 @@ Deno.serve(async (req) => {
               brand_mentioned: parsed.brand_mentioned,
               brand_rank: parsed.brand_rank,
               competitors_mentioned: parsed.competitors_mentioned,
+              competitors_with_rank: parsed.competitors_with_rank,
               sources_cited: parsed.sources_cited,
               cost_usd: r.cost_usd,
               latency_ms: r.latency_ms,
@@ -417,6 +440,8 @@ Deno.serve(async (req) => {
       citation_rate: agg.citation_rate,
       share_of_voice: agg.share_of_voice,
       total_cost_usd: agg.total_cost_usd,
+      brand_mention_count: agg.brand_mention_count,
+      total_mention_count: agg.total_mention_count,
       raw_response_count: rows.length,
       completed_at: new Date().toISOString(),
       error_message: failed > 0 ? `${failed} LLM calls failed (see logs)` : null,
