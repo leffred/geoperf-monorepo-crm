@@ -41,6 +41,9 @@ Avec S16 (5 CRITICAL fixés) + S16.1 (5 bugs PPT fixés), **le SaaS est techniqu
 7. **§4.7** Trial expiring email J-2 (réduit churn surprise)
 8. **§4.8** Sentry / error tracking minimal (Next.js + Edge Functions config)
 
+**Pricing UI (priorité 1bis — urgent vu changement grille Stripe S16.2)** :
+9. **§4.9** Refonte UI pricing : HT prominent + TTC petit + annuel "X€/mois équivalent + 3 mois offerts" (#2.11 BUGS_AND_FEEDBACK)
+
 ### Out of scope (S18+ ou actions manuelles)
 
 - ❌ Lever effectivement le `test_mode` Apollo et envoyer la première vague (action Fred après validation copies + dry-run)
@@ -379,6 +382,73 @@ Configuration auto via `npx @sentry/wizard@latest -i nextjs` ou manuelle :
 **Edge Functions** : Sentry Deno integration possible via `@sentry/deno`. Mais pour S17, on se contente du frontend Next.js. Les erreurs Edge Functions restent dans Supabase logs (acceptable).
 
 **Test** : trigger une erreur volontaire dans une page (ex: throw Error dans un server component) → vérifier qu'elle apparaît dans Sentry dashboard.
+
+### 4.9 Refonte UI pricing — HT prominent + annuel "mois équivalent"
+
+**Contexte** : suite à S16.2, la grille Stripe a basculé en `tax_behavior=exclusive` (HT + TVA s'ajoute) avec nouveaux prices annuels -25% (équivalents mensuels ronds : 59€/149€/299€/599€). L'UI doit s'aligner.
+
+**Fichiers à refondre** :
+- `landing/app/saas/page.tsx` (page tarifs publique)
+- `landing/app/app/billing/page.tsx` (billing user logué)
+- `landing/app/saas/vs-getmint/page.tsx` (table comparative GetMint, à ajuster avec les nouveaux annuels)
+
+**Spec UI — pour chaque card de plan** :
+
+```
+┌─ Mode Mensuel ────────────┐  ┌─ Mode Annuel ──────────────┐
+│  STARTER                  │  │  STARTER  · 3 mois offerts │
+│                           │  │                            │
+│  79€ HT / mois            │  │  59€ HT / mois             │
+│  soit 94.80€ TTC          │  │  facturé annuellement      │
+│                           │  │  Économisez 240€ vs mensuel│
+│  [ Démarrer Starter ]     │  │  [ Démarrer Starter ]      │
+└───────────────────────────┘  └────────────────────────────┘
+```
+
+**Conventions visuelles** :
+- Prix HT : 5xl, font-medium, ink, tabular-nums (gros et lisible)
+- "soit X€ TTC" / "facturé annuellement" : 11px, ink-subtle, juste sous le prix HT
+- Économie : 12px, color-success (vert) ou brand-500 selon goût
+- Badge "3 mois offerts" : top-right de la card, en mode annuel uniquement, fond brand-50, texte brand-600
+
+**Toggle Mensuel/Annuel** (déjà existant via `?cycle=annual`) :
+- Améliorer le visuel : segmented control plutôt que 2 liens isolés
+- Quand Annuel actif : ajouter une ligne "Économisez 25% — 3 mois offerts" sous le toggle
+
+**Calculs** :
+```typescript
+// Constantes pricing
+const TIERS = {
+  starter: { monthly_ht: 7900,  yearly_ht: 70800,  yearly_eq_mo_ht: 5900,  saving_yr: 24000 },
+  growth:  { monthly_ht: 19900, yearly_ht: 178800, yearly_eq_mo_ht: 14900, saving_yr: 60000 },
+  pro:     { monthly_ht: 39900, yearly_ht: 358800, yearly_eq_mo_ht: 29900, saving_yr: 120000 },
+  agency:  { monthly_ht: 79900, yearly_ht: 718800, yearly_eq_mo_ht: 59900, saving_yr: 240000 },
+};
+
+const VAT_RATE = 0.20; // FR
+
+function fmtHT(cents: number): string {
+  return `${(cents / 100).toFixed(0)}€ HT`;
+}
+function fmtTTC(cents: number): string {
+  return `${(cents * (1 + VAT_RATE) / 100).toFixed(2)}€ TTC`.replace(".00", "");
+}
+```
+
+**Page `/saas/vs-getmint`** : mettre à jour le tableau comparatif avec les nouveaux annuels :
+- "Geoperf Starter annuel : 59€/mois HT" vs "GetMint Starter : $99/mois"
+- "Geoperf Pro annuel : 299€/mois HT" vs "GetMint Pro : $499/mois"
+- Ajouter une ligne explicite "**~50% moins cher sur Starter annuel**" comme argument anchor
+
+**Test** :
+- `/saas?cycle=monthly` → tous les plans affichés en HT prominent (79€/199€/399€/799€)
+- `/saas?cycle=annual` → équivalents mensuels en HT (59€/149€/299€/599€) + badge "3 mois offerts" + économie en €
+- `/app/billing` : même logique, plus le badge actuel "Plan actif" sur la card de l'user
+- Click "Démarrer Pro annuel" → checkout Stripe avec 358800 unit_amount + 71760 TVA + 430560 TTC affiché
+
+**Hors scope** :
+- Pas de devise switching (€ uniquement)
+- Pas de toggle entre TTC-prominent / HT-prominent (HT est le standard B2B, on tranche)
 
 ---
 

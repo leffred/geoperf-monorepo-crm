@@ -1,0 +1,214 @@
+{
+  "_doc": "Sprint S17 §4.1 — export du workflow Phase 2.2 Sequence Load (Apollo). Fetched via n8n MCP get_workflow_details le 2026-05-04. ID: b6cwag080lQ2Kq4B. Webhook: POST https://fredericlefebvre.app.n8n.cloud/webhook/geoperf-sequence-load. Body: {report_id, sequence_id, lead_score_min, max}. État au fetch: active=true (Fred l'a activé après création S15). Le workflow ne déclenche pas d'email tant que la sequence Apollo cible reste en 'paused' (cf PHASE_2_2_SEQUENCE_LOAD_SDK.md §Test mode).",
+  "name": "GEOPERF Phase 2.2 - Sequence Load (Apollo)",
+  "id": "b6cwag080lQ2Kq4B",
+  "active": true,
+  "description": "Enroll prospects (status=new + email_verified + lead_score>=min) dans Apollo Sequence. Crée contact Apollo par prospect, puis bulk add_contact_ids. Update status='sequence_a' + log events.",
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "nodes": [
+    {
+      "parameters": { "httpMethod": "POST", "path": "geoperf-sequence-load", "responseMode": "responseNode", "options": {} },
+      "id": "30ac0ea4-0218-48c9-91eb-c5abc47e38a2",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "geoperf-sequence-load"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "report_id", "value": "={{ $json.body.report_id }}", "type": "string" },
+            { "id": "2", "name": "sequence_id", "value": "={{ $json.body.sequence_id }}", "type": "string" },
+            { "id": "3", "name": "lead_score_min", "value": "={{ $json.body.lead_score_min || 50 }}", "type": "number" },
+            { "id": "4", "name": "max", "value": "={{ $json.body.max || 50 }}", "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6febea66-b5dc-40cb-950a-7c0268416e92",
+      "name": "Extract params",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH ranked AS (\n  SELECT \n    p.id AS prospect_id, p.first_name, p.last_name, p.email, p.title, p.tracking_token,\n    p.apollo_person_id, p.lead_score,\n    c.nom AS company_name, c.domain AS company_domain,\n    rc.rank, rc.visibility_score, r.sous_categorie,\n    (SELECT c2.nom FROM report_companies rc2 JOIN companies c2 ON c2.id = rc2.company_id \n     WHERE rc2.report_id = p.report_id AND rc2.company_id <> p.company_id \n     ORDER BY rc2.rank ASC LIMIT 1) AS competitor_top1,\n    LOWER(REPLACE(r.sous_categorie, ' ', '-')) AS sous_cat_slug\n  FROM prospects p\n  JOIN companies c ON c.id = p.company_id\n  LEFT JOIN report_companies rc ON rc.report_id = p.report_id AND rc.company_id = p.company_id\n  JOIN reports r ON r.id = p.report_id\n  WHERE p.report_id = (($1::jsonb)->>'report_id')::uuid\n    AND p.status = 'new'\n    AND p.email IS NOT NULL\n    AND p.email_verified = true\n    AND p.lead_score >= (($1::jsonb)->>'lead_score_min')::int\n    AND p.apollo_person_id IS NOT NULL\n)\nSELECT * FROM ranked ORDER BY lead_score DESC LIMIT (($1::jsonb)->>'max')::int;",
+        "options": { "queryReplacement": "={{ JSON.stringify({report_id: $json.report_id, lead_score_min: $json.lead_score_min, max: $json.max}) }}" }
+      },
+      "id": "cec5677a-49b8-4491-b88f-df758d6a3912",
+      "name": "Get eligible prospects",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = items.map(i => {\n  const p = i.json;\n  const landing_url = `https://geoperf.com/${p.sous_cat_slug}?t=${p.tracking_token}`;\n  return { json: {\n    prospect_id: p.prospect_id,\n    apollo_person_id: p.apollo_person_id,\n    apollo_payload: {\n      person_id: p.apollo_person_id,\n      label_names: [`geoperf:${p.sous_cat_slug}`, `score-${p.visibility_score || 0}-of-4`, `rank-${p.rank || 'unknown'}`]\n    }\n  }};\n});\nreturn out;"
+      },
+      "id": "106e7368-6efc-4c0f-a939-1876007182b1",
+      "name": "Build Apollo payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 0]
+    },
+    {
+      "parameters": { "options": {} },
+      "id": "3b97d3c0-7b97-4a96-a395-62a63bfc16ac",
+      "name": "Split per prospect",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [960, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/contacts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Cache-Control", "value": "no-cache" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.apollo_payload) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "058f1db2-238d-41c9-a33d-57d2a59d4d4e",
+      "name": "Apollo create contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const resp = items[0]?.json || {};\nconst contact = resp.contact || resp;\nconst contact_id = contact.id || resp.id;\nconst prospectId = $('Build Apollo payload').item.json.prospect_id;\nreturn [{ json: { prospect_id: prospectId, apollo_contact_id: contact_id }}];"
+      },
+      "id": "d163e568-1173-4d9a-8232-dddd2dbdfd32",
+      "name": "Save contact_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1440, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.prospects SET metadata = metadata || jsonb_build_object('apollo_contact_id', ($1::jsonb)->>'apollo_contact_id', 'sequence_load_pending', true), updated_at = NOW() WHERE id = (($1::jsonb)->>'prospect_id')::uuid RETURNING id;",
+        "options": { "queryReplacement": "={{ JSON.stringify($json) }}" }
+      },
+      "id": "cf6dadf2-116c-4f8c-bce0-680e19ee4fc8",
+      "name": "Update prospect metadata",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1680, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT array_agg(DISTINCT (metadata->>'apollo_contact_id')) FILTER (WHERE metadata->>'apollo_contact_id' IS NOT NULL AND metadata->>'sequence_load_pending' = 'true') AS contact_ids FROM public.prospects WHERE report_id = (($1::jsonb)->>'report_id')::uuid;",
+        "options": { "queryReplacement": "={{ JSON.stringify({report_id: $('Extract params').item.json.report_id}) }}" }
+      },
+      "id": "10d52dcd-271e-4e00-9795-7e25749faa9d",
+      "name": "Aggregate enrolled IDs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1200, 288]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://api.apollo.io/api/v1/emailer_campaigns/\" + $('Extract params').item.json.sequence_id + \"/add_contact_ids\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Cache-Control", "value": "no-cache" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contact_ids: $json.contact_ids, sequence_no_email: false, sequence_active_in_other_campaigns_check: false }) }}",
+        "options": { "timeout": 30000 }
+      },
+      "id": "233cb355-1cb0-4b32-9207-ce129eb544ba",
+      "name": "Apollo enroll in sequence",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1440, 288]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.prospects SET status = 'sequence_a', first_contact_at = COALESCE(first_contact_at, NOW()), metadata = metadata - 'sequence_load_pending' || jsonb_build_object('sequence_a_started_at', NOW(), 'sequence_a_apollo_seq_id', ($1::jsonb)->>'sequence_id'), updated_at = NOW() WHERE report_id = (($1::jsonb)->>'report_id')::uuid AND metadata->>'sequence_load_pending' = 'true' RETURNING id;",
+        "options": { "queryReplacement": "={{ JSON.stringify({report_id: $('Extract params').item.json.report_id, sequence_id: $('Extract params').item.json.sequence_id}) }}" }
+      },
+      "id": "7ac5629a-bca4-480b-a228-ac7c7d34bd71",
+      "name": "Mark prospects as sequence_a",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1680, 288]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.prospect_events (prospect_id, event_type, channel, direction, metadata) SELECT id, 'sequence_a_enrolled', 'email', 'outbound', jsonb_build_object('apollo_seq_id', ($1::jsonb)->>'sequence_id', 'enrolled_at', NOW()) FROM public.prospects WHERE report_id = (($1::jsonb)->>'report_id')::uuid AND status = 'sequence_a' AND first_contact_at >= NOW() - INTERVAL '5 minutes';",
+        "options": { "queryReplacement": "={{ JSON.stringify({report_id: $('Extract params').item.json.report_id, sequence_id: $('Extract params').item.json.sequence_id}) }}" }
+      },
+      "id": "7988e00f-e01e-4cad-8edf-0422b6e03060",
+      "name": "Log sequence_a_enrolled events",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [1920, 288]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, report_id: $('Extract params').item.json.report_id, sequence_id: $('Extract params').item.json.sequence_id, enrolled_count: ($('Aggregate enrolled IDs').item.json.contact_ids || []).length } }}",
+        "options": {}
+      },
+      "id": "65915ba2-6cc6-40a8-9c46-b56826aeee3b",
+      "name": "Webhook response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2160, 288]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": { "main": [[{ "node": "Extract params", "type": "main", "index": 0 }]] },
+    "Extract params": { "main": [[{ "node": "Get eligible prospects", "type": "main", "index": 0 }]] },
+    "Get eligible prospects": { "main": [[{ "node": "Build Apollo payload", "type": "main", "index": 0 }]] },
+    "Build Apollo payload": { "main": [[{ "node": "Split per prospect", "type": "main", "index": 0 }]] },
+    "Split per prospect": {
+      "main": [
+        [{ "node": "Aggregate enrolled IDs", "type": "main", "index": 0 }],
+        [{ "node": "Apollo create contact", "type": "main", "index": 0 }]
+      ]
+    },
+    "Apollo create contact": {
+      "main": [[
+        { "node": "Save contact_id", "type": "main", "index": 0 },
+        { "node": "Split per prospect", "type": "main", "index": 0 }
+      ]]
+    },
+    "Save contact_id": { "main": [[{ "node": "Update prospect metadata", "type": "main", "index": 0 }]] },
+    "Aggregate enrolled IDs": { "main": [[{ "node": "Apollo enroll in sequence", "type": "main", "index": 0 }]] },
+    "Apollo enroll in sequence": { "main": [[{ "node": "Mark prospects as sequence_a", "type": "main", "index": 0 }]] },
+    "Mark prospects as sequence_a": { "main": [[{ "node": "Log sequence_a_enrolled events", "type": "main", "index": 0 }]] },
+    "Log sequence_a_enrolled events": { "main": [[{ "node": "Webhook response", "type": "main", "index": 0 }]] }
+  }
+}

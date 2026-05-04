@@ -186,6 +186,25 @@
 
 ---
 
+### 🟡 P3 — Refontes UI à traiter en S17
+
+#### ✨ FEEDBACK #2.11 — Refonte affichage prix /saas et /app/billing
+- **Statut** : 🆕 Open — sprint cible S17
+- **Page** : `landing/app/saas/page.tsx` + `landing/app/app/billing/page.tsx`
+- **Décision Fred 2026-05-04** : refonte de l'affichage prix sur les 2 pages publiques + billing :
+  1. **HT prominent + TTC petit** : afficher le prix HT en grand (ex: 79€), puis en petit gris en dessous "soit 94.80€ TTC". Cohérent B2B (clients pro raisonnent en HT car ils récupèrent la TVA).
+  2. **Annuel : prix mensuel équivalent en grand, économie en dessous**. Exemple : "59€ HT / mois" en grand, puis "Facturé 708€/an, soit 3 mois offerts" en petit. Le total annuel ne doit PAS être affiché en grand pour ne pas effrayer le clic.
+  3. **Badge "3 mois offerts"** sur le toggle annuel (alternative ou complément à "économisez X€").
+- **Stripe affiche déjà HT+TVA=TTC** au checkout grâce à `tax_behavior=exclusive` sur tous les prices (livré S16.2).
+- **Nouvelle grille pricing -25% sur annuel** (recréée S16.2) :
+  - Starter 79€/mo → 59€/mo annuel (708€/an)
+  - Growth 199€/mo → 149€/mo annuel (1788€/an)
+  - Pro 399€/mo → 299€/mo annuel (3588€/an)
+  - Agency 799€/mo → 599€/mo annuel (7188€/an)
+- **Comparaison concurrent GetMint** : Geoperf devient ~50% moins cher sur Starter annuel et ~40% moins cher sur Pro annuel — argument anchoring fort à pousser sur `/saas/vs-getmint`.
+
+---
+
 ## Round 2 → 3 — (à venir)
 
 > Quand tu refais une session de tests, ajoute un nouveau header `## Round 2 — Test Fred — YYYY-MM-DD` ici et reproduit la structure. Numérotation : `#2.1`, `#2.2`, etc.
