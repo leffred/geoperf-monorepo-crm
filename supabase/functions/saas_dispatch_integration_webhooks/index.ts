@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
 
     // Tier de l'owner
     const { data: sub } = await supabase.from("saas_subscriptions")
-      .select("tier").eq("user_id", a.user_id).eq("status", "active").maybeSingle();
+      .select("tier").eq("user_id", a.user_id).in("status", ["active", "trialing"]).maybeSingle();
     const tier = (sub as any)?.tier ?? "free";
 
     // Charge integrations actives pour ce user

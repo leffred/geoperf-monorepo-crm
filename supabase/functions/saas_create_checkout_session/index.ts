@@ -57,10 +57,25 @@ Deno.serve(async (req) => {
 
   const { tier, billing_cycle = "monthly", trial = false } = await req.json().catch(() => ({}));
   if (billing_cycle !== "monthly" && billing_cycle !== "annual") {
-    return new Response("Invalid billing_cycle (must be 'monthly' or 'annual')", { status: 400 });
+    return new Response(JSON.stringify({ error: "Invalid billing_cycle (must be 'monthly' or 'annual')" }), {
+      status: 400, headers: { "content-type": "application/json" },
+    });
   }
-  const priceId = TIER_CYCLE_TO_PRICE[billing_cycle]?.[tier];
-  if (!priceId) return new Response(`Invalid tier '${tier}' for cycle '${billing_cycle}'`, { status: 400 });
+  const cycleMap = TIER_CYCLE_TO_PRICE[billing_cycle];
+  if (!cycleMap || !(tier in cycleMap)) {
+    return new Response(JSON.stringify({ error: `Invalid tier '${tier}' (valid: starter, growth, pro, agency)` }), {
+      status: 400, headers: { "content-type": "application/json" },
+    });
+  }
+  const priceId = cycleMap[tier];
+  if (!priceId) {
+    // S16 (CRITICAL #1) : env var price_id manquante (ex: STRIPE_PRICE_PRO_YEARLY non configuré).
+    // Distingue clairement d'une 500 muette pour faciliter le debug côté Vercel.
+    return new Response(JSON.stringify({
+      error: `Plan '${tier}' ${billing_cycle} not configured`,
+      hint: `Set env var STRIPE_PRICE_${tier.toUpperCase()}_${billing_cycle === "annual" ? "YEARLY" : "MONTHLY"} on the Edge Function.`,
+    }), { status: 503, headers: { "content-type": "application/json" } });
+  }
 
   // Trial 14 jours réservé au tier Pro (S13)
   const trialDays = (trial === true && tier === "pro") ? 14 : undefined;

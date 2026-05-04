@@ -48,26 +48,28 @@ function renderEmail(profile: ProfileRow): { subject: string; html: string; text
   const dashboardUrl = `${APP_URL}/app/dashboard`;
   const settingsUrl = `${APP_URL}/app/settings`;
 
+  // S16 (§4.7) : palette legacy navy/cream/Source Serif → Tech crisp ink/surface/Inter.
+  // Glyphe `·` ambré conservé sur le wordmark uniquement (signature visuelle).
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title>
 <style>
-body { margin:0; padding:0; background:#F1EFE8; font-family: -apple-system, "Segoe UI", "Inter", sans-serif; color:#2C2C2A; }
-.wrap { max-width:560px; margin:0 auto; padding:24px 16px; }
+body { margin:0; padding:0; background:#F7F8FA; font-family: -apple-system, "Inter", "Segoe UI", sans-serif; color:#0A0E1A; }
+.wrap { max-width:560px; margin:0 auto; padding:32px 16px; }
 .card { background:#FFFFFF; padding:36px 32px; }
-.eyebrow { font-family: "IBM Plex Mono", monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#0C447C; margin:0 0 12px; }
-h1 { font-family: "Source Serif Pro", Georgia, serif; font-size:26px; line-height:1.3; color:#042C53; font-weight:500; margin:0 0 16px; }
+.eyebrow { font-family: "JetBrains Mono", "IBM Plex Mono", monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#2563EB; margin:0 0 12px; }
+h1 { font-family: "Inter", sans-serif; font-size:26px; line-height:1.3; color:#0A0E1A; font-weight:500; letter-spacing:-0.025em; margin:0 0 16px; }
 p { font-size:15px; line-height:1.65; margin:0 0 14px; }
-.intro { font-size:15px; color:#2C2C2A; margin-bottom:24px; }
+.intro { font-size:15px; color:#0A0E1A; margin-bottom:24px; }
 .steps { margin:24px 0 28px; padding:0; list-style:none; counter-reset:step; }
 .steps li { counter-increment:step; padding-left:48px; position:relative; margin-bottom:18px; }
-.steps li::before { content: counter(step, decimal-leading-zero); position:absolute; left:0; top:-2px; font-family: "IBM Plex Mono", monospace; font-size:11px; letter-spacing:1.5px; color:#EF9F27; background:#042C53; padding:6px 9px; }
-.steps li strong { display:block; font-family: "Source Serif Pro", Georgia, serif; font-size:15px; color:#042C53; font-weight:500; margin-bottom:2px; }
-.steps li span { font-size:14px; color:#5F5E5A; line-height:1.55; }
-.cta { display:inline-block; background:#042C53; color:#FFFFFF !important; padding:14px 28px; font-size:15px; font-weight:500; text-decoration:none; margin:8px 0 24px; }
-.subtle { font-size:13px; color:#5F5E5A; line-height:1.6; }
-.footer { font-size:11px; color:#5F5E5A; padding:24px 16px 0; text-align:center; line-height:1.6; }
-.footer a { color:#5F5E5A; text-decoration:underline; }
-.logo { font-family: "Source Serif Pro", Georgia, serif; font-size:22px; color:#042C53; font-weight:500; }
+.steps li::before { content: counter(step, decimal-leading-zero); position:absolute; left:0; top:-2px; font-family: "JetBrains Mono", monospace; font-size:11px; letter-spacing:1.5px; color:#FFFFFF; background:#0A0E1A; padding:6px 9px; }
+.steps li strong { display:block; font-family: "Inter", sans-serif; font-size:15px; color:#0A0E1A; font-weight:500; letter-spacing:-0.01em; margin-bottom:2px; }
+.steps li span { font-size:14px; color:#5B6478; line-height:1.55; }
+.cta { display:inline-block; background:#0A0E1A; color:#FFFFFF !important; padding:14px 28px; font-size:15px; font-weight:500; text-decoration:none; margin:8px 0 24px; }
+.subtle { font-size:13px; color:#5B6478; line-height:1.6; }
+.footer { font-size:11px; color:#5B6478; padding:24px 16px 0; text-align:center; line-height:1.6; }
+.footer a { color:#5B6478; text-decoration:underline; }
+.logo { font-family: "Inter", sans-serif; font-size:22px; color:#0A0E1A; font-weight:500; }
 .logo .dot { color:#EF9F27; }
 </style></head>
 <body>
@@ -94,7 +96,7 @@ p { font-size:15px; line-height:1.65; margin:0 0 14px; }
 
       <a href="${ctaUrl}" class="cta">Suivre ma 1ère marque →</a>
 
-      <p class="subtle">Vous pouvez à tout moment consulter votre <a href="${dashboardUrl}" style="color:#0C447C;">dashboard</a> ou ajuster vos <a href="${settingsUrl}" style="color:#0C447C;">préférences notifications</a>.</p>
+      <p class="subtle">Vous pouvez à tout moment consulter votre <a href="${dashboardUrl}" style="color:#2563EB;">dashboard</a> ou ajuster vos <a href="${settingsUrl}" style="color:#2563EB;">préférences notifications</a>.</p>
     </div>
     <div class="footer">
       <p class="logo">Ge<span class="dot">·</span>perf</p>

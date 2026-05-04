@@ -321,7 +321,7 @@ Deno.serve(async (req) => {
     .from("saas_subscriptions")
     .select("tier, status")
     .eq("user_id", brand.user_id)
-    .eq("status", "active")
+    .in("status", ["active", "trialing"])
     .maybeSingle();
   const tier = (sub?.tier ?? "free") as Tier;
   const llms = LLMS_BY_TIER[tier];

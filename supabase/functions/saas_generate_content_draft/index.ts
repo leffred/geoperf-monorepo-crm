@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
 
     // Tier-gate
     const { data: sub } = await adminClient
-      .from("saas_subscriptions").select("tier").eq("user_id", ownerId).eq("status", "active").maybeSingle();
+      .from("saas_subscriptions").select("tier").eq("user_id", ownerId).in("status", ["active", "trialing"]).maybeSingle();
     const tier = (sub as any)?.tier ?? "free";
     if (!ALLOWED_TIERS.has(tier)) {
       return new Response(JSON.stringify({ error: "tier_too_low", tier, hint: "Content Studio est réservé Pro+." }), { status: 403 });

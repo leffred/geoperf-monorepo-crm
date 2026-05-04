@@ -25,8 +25,11 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const ALERTS_FROM = Deno.env.get("ALERTS_EMAIL_FROM") ?? "Geoperf Alerts <alerts@geoperf.com>";
 const APP_URL = Deno.env.get("APP_URL") ?? "https://geoperf.com";
 
-// PRE-PROD FILTER : a retirer avant rollout. Cf SPRINT_S15_BRIEF section 6.7.
-const TEST_EMAIL_FILTER = (Deno.env.get("DIGEST_TEST_EMAIL_FILTER") ?? "flefebvre@jourdechance.com")
+// Optional test filter via env var. Default vide = filtre désactivé, tous les
+// users digest_weekly_enabled=true reçoivent le digest. Pour activer un filtre
+// pendant un test ad-hoc, set DIGEST_TEST_EMAIL_FILTER="email1,email2" dans les
+// Supabase secrets, puis unset après le test.
+const TEST_EMAIL_FILTER = (Deno.env.get("DIGEST_TEST_EMAIL_FILTER") ?? "")
   .split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {

@@ -32,7 +32,11 @@ type Severity = "high" | "medium" | "low";
 
 // ============== TEMPLATES ==============
 const SEV_LABEL: Record<Severity, string> = { high: "Important", medium: "À regarder", low: "Info" };
-const SEV_COLOR: Record<Severity, string> = { high: "#B91C1C", medium: "#EF9F27", low: "#0C447C" };
+// S16 (§4.7) : sévérités Tech crisp.
+// - high : red (#B91C1C) - alarme
+// - medium : amber (#EF9F27) - vigilance
+// - low : brand-500 (#2563EB) - info neutre (au lieu de navy legacy)
+const SEV_COLOR: Record<Severity, string> = { high: "#B91C1C", medium: "#EF9F27", low: "#2563EB" };
 
 const TYPE_LABELS: Record<AlertType, string> = {
   rank_drop: "Rang en baisse",
@@ -84,22 +88,24 @@ function renderEmail(alert: AlertRow, brand: BrandRow, profile: ProfileRow): { s
 
   const subject = `[${sevLabel}] ${brand.name} — ${alert.title}`;
 
+  // S16 (§4.7) : palette Tech crisp ink/surface/brand-500/Inter.
+  // Glyphe `·` ambré conservé sur le wordmark uniquement.
   const html = `<!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title>
 <style>
-body { margin:0; padding:0; background:#F1EFE8; font-family: -apple-system, "Segoe UI", "Inter", sans-serif; color:#2C2C2A; }
-.wrap { max-width:560px; margin:0 auto; padding:24px 16px; }
+body { margin:0; padding:0; background:#F7F8FA; font-family: -apple-system, "Inter", "Segoe UI", sans-serif; color:#0A0E1A; }
+.wrap { max-width:560px; margin:0 auto; padding:32px 16px; }
 .card { background:#FFFFFF; padding:32px 28px; }
-.eyebrow { font-family: "IBM Plex Mono", monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#0C447C; margin:0 0 8px; }
-h1 { font-family: "Source Serif Pro", Georgia, serif; font-size:22px; line-height:1.3; color:#042C53; font-weight:500; margin:0 0 8px; }
+.eyebrow { font-family: "JetBrains Mono", "IBM Plex Mono", monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:#2563EB; margin:0 0 8px; }
+h1 { font-family: "Inter", sans-serif; font-size:22px; line-height:1.3; color:#0A0E1A; font-weight:500; letter-spacing:-0.025em; margin:0 0 8px; }
 p { font-size:14px; line-height:1.6; margin:0 0 12px; }
-.brand-line { font-size:12px; color:#5F5E5A; margin-bottom:24px; }
-.severity-pill { display:inline-block; padding:4px 10px; font-family: "IBM Plex Mono", monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#FFFFFF; background:${sevColor}; }
-.body-block { border-left:2px solid #EF9F27; padding-left:16px; margin:16px 0; font-size:14px; line-height:1.6; }
-.cta { display:inline-block; background:#042C53; color:#FFFFFF !important; padding:12px 24px; font-size:14px; font-weight:500; text-decoration:none; margin-top:16px; }
-.footer { font-size:11px; color:#5F5E5A; padding:24px 16px 0; text-align:center; line-height:1.6; }
-.footer a { color:#5F5E5A; text-decoration:underline; }
-.logo { font-family: "Source Serif Pro", Georgia, serif; font-size:20px; color:#042C53; font-weight:500; }
+.brand-line { font-size:12px; color:#5B6478; margin-bottom:24px; }
+.severity-pill { display:inline-block; padding:4px 10px; font-family: "JetBrains Mono", monospace; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#FFFFFF; background:${sevColor}; }
+.body-block { border-left:2px solid #2563EB; padding-left:16px; margin:16px 0; font-size:14px; line-height:1.6; color:#0A0E1A; }
+.cta { display:inline-block; background:#0A0E1A; color:#FFFFFF !important; padding:12px 24px; font-size:14px; font-weight:500; text-decoration:none; margin-top:16px; }
+.footer { font-size:11px; color:#5B6478; padding:24px 16px 0; text-align:center; line-height:1.6; }
+.footer a { color:#5B6478; text-decoration:underline; }
+.logo { font-family: "Inter", sans-serif; font-size:20px; color:#0A0E1A; font-weight:500; }
 .logo .dot { color:#EF9F27; }
 </style></head>
 <body>
@@ -159,7 +165,7 @@ Deno.serve(async (req) => {
     const [{ data: brand }, { data: profile }, { data: sub }] = await Promise.all([
       supabase.from("saas_tracked_brands").select("id, name, domain").eq("id", alert.brand_id).maybeSingle(),
       supabase.from("saas_profiles").select("email, full_name, email_notifs_enabled").eq("id", alert.user_id).maybeSingle(),
-      supabase.from("saas_subscriptions").select("tier, status").eq("user_id", alert.user_id).eq("status", "active").maybeSingle(),
+      supabase.from("saas_subscriptions").select("tier, status").eq("user_id", alert.user_id).in("status", ["active", "trialing"]).maybeSingle(),
     ]);
 
     if (!brand) return new Response(JSON.stringify({ error: "brand not found" }), { status: 404 });

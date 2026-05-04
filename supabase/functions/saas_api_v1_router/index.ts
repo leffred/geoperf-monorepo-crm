@@ -59,7 +59,7 @@ async function authenticateApiKey(authHeader: string | null): Promise<{ key: Api
   // Tier-gate Agency
   const { data: sub } = await admin
     .from("saas_subscriptions").select("tier")
-    .eq("user_id", (keyRow as any).user_id).eq("status", "active").maybeSingle();
+    .eq("user_id", (keyRow as any).user_id).in("status", ["active", "trialing"]).maybeSingle();
   const tier = (sub as any)?.tier ?? "free";
   if (tier !== "agency") {
     return { error: "API access requires Agency tier", status: 403 };

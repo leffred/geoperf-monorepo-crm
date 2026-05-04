@@ -1,0 +1,63 @@
+<!--
+Geoperf — Supabase Auth "Confirm signup" template (Tech crisp).
+Sprint S16.1 finding #1.3.
+
+Pour appliquer (Phase A, action manuelle Fred) :
+  Supabase Dashboard → Authentication → Email Templates → "Confirm signup"
+  → Coller le HTML ci-dessous → Save.
+
+Variables Supabase utilisables dans ce template :
+  {{ .ConfirmationURL }}   lien magique pour confirmer l'email
+  {{ .Email }}             l'email du user qui vient de signup
+  {{ .SiteURL }}           https://geoperf.com
+  {{ .Token }}             token brut (rare cas custom)
+
+Sender recommandé : "Geoperf <hello@geoperf.com>" — à configurer via Resend SMTP
+relay (Authentication → SMTP Settings → Resend) si pas déjà fait.
+
+Palette / typo : alignée avec saas_send_welcome_email + saas_send_alert_email
+post-S16 §4.7 (Inter, ink #0A0E1A, surface #F7F8FA, brand-500 #2563EB,
+JetBrains Mono pour les eyebrows, glyphe `·` ambré préservé sur le wordmark).
+-->
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirmer ton email — Geoperf</title></head>
+<body style="margin:0;padding:0;background:#F7F8FA;font-family:-apple-system,Inter,'Segoe UI',sans-serif;color:#0A0E1A;">
+  <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+    <div style="background:#FFFFFF;padding:36px 32px;">
+
+      <p style="font-family:'JetBrains Mono','IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#2563EB;margin:0 0 12px;">Confirmation requise</p>
+
+      <h1 style="font-family:Inter,sans-serif;font-size:24px;line-height:1.3;font-weight:500;letter-spacing:-0.025em;color:#0A0E1A;margin:0 0 16px;">Bienvenue sur Geoperf, {{ .Email }}</h1>
+
+      <p style="font-size:15px;line-height:1.65;margin:0 0 14px;color:#0A0E1A;">
+        Pour activer ton compte et commencer à monitorer ta marque dans <strong>ChatGPT</strong>, <strong>Claude</strong>, <strong>Gemini</strong> et <strong>Perplexity</strong>, clique sur le bouton ci-dessous.
+      </p>
+
+      <div style="margin:28px 0;">
+        <a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#0A0E1A;color:#FFFFFF !important;padding:14px 28px;font-size:15px;font-weight:500;text-decoration:none;letter-spacing:-0.005em;">
+          Confirmer mon email
+        </a>
+      </div>
+
+      <p style="font-size:13px;color:#5B6478;line-height:1.6;margin:0 0 14px;">
+        Ce lien est valable <strong>24 heures</strong>. Si tu n'as pas demandé cet email, ignore-le simplement — aucune action ne sera prise.
+      </p>
+
+      <p style="font-size:12px;color:#8C94A6;line-height:1.5;margin:24px 0 0;border-top:1px solid #E6E8EE;padding-top:16px;">
+        Si le bouton ne fonctionne pas, copie-colle ce lien dans ton navigateur :<br>
+        <span style="font-family:'JetBrains Mono',monospace;color:#2563EB;word-break:break-all;font-size:11px;">{{ .ConfirmationURL }}</span>
+      </p>
+
+    </div>
+
+    <div style="font-size:11px;color:#5B6478;padding:24px 16px 0;text-align:center;line-height:1.6;">
+      <p style="font-family:Inter,sans-serif;font-size:18px;color:#0A0E1A;font-weight:500;margin:0 0 12px;">Ge<span style="color:#EF9F27;">·</span>perf</p>
+      <p style="margin:0 0 8px;">Geoperf monitore la perception de ta marque par les LLM (ChatGPT, Claude, Gemini, Perplexity).</p>
+      <p style="margin:12px 0 0;">
+        <a href="{{ .SiteURL }}/privacy" style="color:#5B6478;text-decoration:underline;">Confidentialité</a>
+        &nbsp;·&nbsp;
+        <a href="{{ .SiteURL }}/terms" style="color:#5B6478;text-decoration:underline;">CGU</a>
+      </p>
+    </div>
+  </div>
+</body></html>

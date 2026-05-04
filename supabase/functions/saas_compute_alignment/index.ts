@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
     // Tier-gate
     const { data: sub } = await supabase
       .from("saas_subscriptions").select("tier")
-      .eq("user_id", snap.user_id).eq("status", "active").maybeSingle();
+      .eq("user_id", snap.user_id).in("status", ["active", "trialing"]).maybeSingle();
     const tier = (sub as any)?.tier ?? "free";
     if (!ALLOWED_TIERS.has(tier)) {
       return new Response(JSON.stringify({ ok: true, skipped: "tier_too_low", tier, snapshot_id: snap.id }), { headers: { "content-type": "application/json" } });

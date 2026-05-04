@@ -48,10 +48,13 @@ function resolveTierFromPriceId(priceId: string): TierResolution | null {
   return null;
 }
 
-function mapStripeStatus(s: string): "active" | "past_due" | "canceled" | "incomplete" {
-  if (s === "active" || s === "trialing") return "active";
+function mapStripeStatus(s: string): "active" | "trialing" | "past_due" | "canceled" | "incomplete" {
+  // S16 (CRITICAL #4) : preserve 'trialing' instead of collapsing to 'active'.
+  // Le frontend / lib/saas-auth.ts s'appuie dessus pour afficher le banner trial actif.
+  if (s === "active") return "active";
+  if (s === "trialing") return "trialing";
   if (s === "past_due" || s === "unpaid") return "past_due";
-  if (s === "canceled") return "canceled";
+  if (s === "canceled" || s === "incomplete_expired") return "canceled";
   return "incomplete";
 }
 
@@ -134,6 +137,23 @@ Deno.serve(async (req) => {
         const userId = await findUserIdByCustomer(sub.customer as string);
         if (!userId) throw new Error(`No user found for customer ${sub.customer}`);
         await upsertSubscription(sub, userId);
+
+        // S16 (CRITICAL #5) : free fallback safety net.
+        // Si la subscription est passée à canceled / past_due / unpaid via update,
+        // et que l'user n'a aucune sub active/trialing/past_due, créer une free fallback.
+        // Le UNIQUE INDEX partiel WHERE status='active' empêche tout doublon.
+        const { data: activeRows } = await supabase
+          .from("saas_subscriptions")
+          .select("id")
+          .eq("user_id", userId)
+          .in("status", ["active", "trialing", "past_due"])
+          .limit(1);
+        if (!activeRows || activeRows.length === 0) {
+          await supabase
+            .from("saas_subscriptions")
+            .insert({ user_id: userId, tier: "free", status: "active", billing_cycle: "monthly", stripe_subscription_id: null });
+          console.warn(`[webhook] subscription.updated downgrade orphan: free fallback for user ${userId}`);
+        }
         break;
       }
 
@@ -145,7 +165,7 @@ Deno.serve(async (req) => {
           .update({ status: "canceled" })
           .eq("stripe_subscription_id", sub.id);
 
-        // Si le user n'a plus de subscription active, recrée un free.
+        // Si le user n'a plus de subscription active/trialing/past_due, recrée un free.
         // Le UNIQUE INDEX partiel WHERE status='active' empêche tout doublon.
         const userId = await findUserIdByCustomer(sub.customer as string);
         if (userId) {
@@ -153,12 +173,13 @@ Deno.serve(async (req) => {
             .from("saas_subscriptions")
             .select("id")
             .eq("user_id", userId)
-            .eq("status", "active")
+            .in("status", ["active", "trialing", "past_due"])
             .limit(1);
           if (!activeRows || activeRows.length === 0) {
             await supabase
               .from("saas_subscriptions")
-              .insert({ user_id: userId, tier: "free", status: "active" });
+              .insert({ user_id: userId, tier: "free", status: "active", billing_cycle: "monthly", stripe_subscription_id: null });
+            console.warn(`[webhook] subscription.deleted downgrade orphan: free fallback for user ${userId}`);
           }
         }
         break;
@@ -166,12 +187,47 @@ Deno.serve(async (req) => {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        if (invoice.subscription) {
+        const customerId = invoice.customer as string;
+        const subscriptionId = invoice.subscription as string | null;
+
+        if (subscriptionId) {
           await supabase
             .from("saas_subscriptions")
             .update({ status: "past_due" })
-            .eq("stripe_subscription_id", invoice.subscription as string);
+            .eq("stripe_subscription_id", subscriptionId);
         }
+
+        // S16 (CRITICAL #3) : envoyer un email "paiement échoué" à l'user.
+        // Lookup profile via stripe_customer_id, puis fire & forget l'Edge Function dédiée.
+        const { data: profile } = await supabase
+          .from("saas_profiles")
+          .select("id, email, full_name")
+          .eq("stripe_customer_id", customerId)
+          .maybeSingle();
+
+        if (!profile) {
+          console.warn(`[webhook] payment_failed: no profile for customer ${customerId}`);
+          break;
+        }
+
+        const SUPABASE_URL_ENV = Deno.env.get("SUPABASE_URL")!;
+        const SUPABASE_SR_ENV = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        fetch(`${SUPABASE_URL_ENV}/functions/v1/saas_send_payment_failed_email`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${SUPABASE_SR_ENV}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: profile.id,
+            email: profile.email,
+            full_name: profile.full_name,
+            amount_due: invoice.amount_due,
+            currency: invoice.currency,
+            hosted_invoice_url: invoice.hosted_invoice_url,
+            next_payment_attempt: invoice.next_payment_attempt,
+          }),
+        }).catch((e) => console.error("[webhook] payment_failed email dispatch:", e instanceof Error ? e.message : String(e)));
         break;
       }
 

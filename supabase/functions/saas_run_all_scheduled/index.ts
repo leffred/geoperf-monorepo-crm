@@ -61,7 +61,7 @@ async function activeUserIds(brandUserIds: string[]): Promise<Set<string>> {
     .from("saas_subscriptions")
     .select("user_id")
     .in("user_id", unique)
-    .eq("status", "active");
+    .in("status", ["active", "trialing"]);
   if (error) throw new Error(`active subs: ${error.message}`);
   return new Set((data ?? []).map((r: { user_id: string }) => r.user_id));
 }
