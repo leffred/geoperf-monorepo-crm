@@ -106,6 +106,34 @@ Deno.serve(async (req) => {
       .eq("id", user.id);
   }
 
+  // S16.2 fix : avant de créer une nouvelle session, cancel les subs Stripe actives
+  // existantes du customer. Sinon Stripe permet plusieurs subs en parallèle pour
+  // le même customer → l'user est facturé N fois. Stripe ne fait PAS le cancel
+  // automatique — c'est au code Geoperf de gérer le upgrade/downgrade.
+  //
+  // Trade-off accepté : si l'user abandonne le checkout après ce cancel, il perd
+  // son ancien plan. Acceptable pour la phase actuelle — la priorité est zéro
+  // double-billing. À raffiner plus tard avec Stripe Customer Portal pour les
+  // upgrades/downgrades in-place.
+  try {
+    const existingSubs = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 10,
+    });
+    const subsToCancel = existingSubs.data.filter(s =>
+      s.status === "active" || s.status === "trialing" || s.status === "past_due" || s.status === "incomplete"
+    );
+    for (const sub of subsToCancel) {
+      await stripe.subscriptions.cancel(sub.id).catch(e => {
+        console.warn(`[checkout] cancel old sub ${sub.id} failed:`, e instanceof Error ? e.message : String(e));
+      });
+    }
+  } catch (e) {
+    console.warn("[checkout] list/cancel old subs warning:", e instanceof Error ? e.message : String(e));
+    // Ne pas bloquer le checkout — laisser l'user passer même si cancel a échoué.
+  }
+
   // Crée la session checkout
   // Note `customer_update.address: "auto"` requis quand `automatic_tax` est on
   // et que le customer n'a pas d'adresse pré-remplie : Stripe utilise l'adresse
