@@ -45,7 +45,7 @@ interface AlertRow {
   brand_id: string;
   user_id: string;
   snapshot_id: string;
-  alert_type: "rank_drop" | "rank_gain" | "competitor_overtake" | "new_source" | "citation_loss" | "citation_gain";
+  alert_type: "rank_drop" | "rank_gain" | "competitor_overtake" | "new_source" | "citation_loss" | "citation_gain" | "competitor_emerged";
   severity: "high" | "medium" | "low";
   title: string;
   body: string;
@@ -190,6 +190,39 @@ Deno.serve(async (req) => {
             metadata: { competitor: comp, mentions: count, ratio: Math.round(ratio * 100) / 100 },
           });
         }
+      }
+    }
+
+    // 3c. Competitor emerged : entité présente dans le top 10 du snapshot N
+    //   et absente du top 20 de N-1. Sévérité high si rank top 5, medium sinon.
+    //   Distingué de competitor_overtake (qui se base sur le ratio 30%+ de mentions
+    //   dans une seule comparaison) — competitor_emerged se concentre sur l'apparition
+    //   en top du classement (ranking by mention_count).
+    const sortedCur = Object.entries(curCompetitorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count], idx) => ({ name, count, rank: idx + 1 }));
+
+    const prevCompetitorCounts: Record<string, number> = {};
+    for (const r of prevResp ?? []) {
+      for (const c of (r.competitors_mentioned ?? []) as string[]) {
+        prevCompetitorCounts[c] = (prevCompetitorCounts[c] ?? 0) + 1;
+      }
+    }
+    const prevTop20 = new Set(
+      Object.entries(prevCompetitorCounts).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([n]) => n),
+    );
+
+    for (const entry of sortedCur.slice(0, 10)) {
+      if (!prevTop20.has(entry.name)) {
+        const sev: "high" | "medium" = entry.rank <= 5 ? "high" : "medium";
+        alerts.push({
+          ...alertBase,
+          alert_type: "competitor_emerged",
+          severity: sev,
+          title: `Nouveau concurrent : ${entry.name}`,
+          body: `${entry.name} apparaît pour la première fois dans le top 10 (rang ${entry.rank}, ${entry.count} mentions). C'est peut-être un signe de mouvement sectoriel.`,
+          metadata: { entity_name: entry.name, mention_count: entry.count, rank: entry.rank, snapshot_id: snap.id },
+        });
       }
     }
 

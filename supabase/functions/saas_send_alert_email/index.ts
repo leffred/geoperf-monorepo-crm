@@ -27,7 +27,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-type AlertType = "rank_drop" | "rank_gain" | "competitor_overtake" | "new_source" | "citation_loss" | "citation_gain";
+type AlertType = "rank_drop" | "rank_gain" | "competitor_overtake" | "new_source" | "citation_loss" | "citation_gain" | "competitor_emerged";
 type Severity = "high" | "medium" | "low";
 
 // ============== TEMPLATES ==============
@@ -38,6 +38,7 @@ const TYPE_LABELS: Record<AlertType, string> = {
   rank_drop: "Rang en baisse",
   rank_gain: "Rang en progression",
   competitor_overtake: "Nouveau concurrent visible",
+  competitor_emerged: "Concurrent émergent",
   new_source: "Nouvelles sources autorités",
   citation_loss: "Taux de citation en chute",
   citation_gain: "Taux de citation en hausse",
@@ -47,6 +48,7 @@ const TYPE_EMOJI: Record<AlertType, string> = {
   rank_drop: "↓",
   rank_gain: "↑",
   competitor_overtake: "⚠",
+  competitor_emerged: "◇",
   new_source: "★",
   citation_loss: "↓",
   citation_gain: "↑",
