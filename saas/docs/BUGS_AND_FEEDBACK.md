@@ -63,7 +63,7 @@
 ### 🔴 P1 — À traiter en S16 ou avant
 
 #### 🐛 BUG #1.3 — Mail de confirmation post-signup non brandé Geoperf
-- **Statut** : ✅ Fixed (S16.1 Phase B, 2026-05-04) — Phase A en attente Fred
+- **Statut** : ✅ Fixed (S16.1 Phase A + B, 2026-05-04) — Phase A validée par Fred (Resend verified + SMTP Supabase configuré + test E2E OK avec mail brandé reçu)
 - **Page** : email reçu juste après création de compte sur `/signup`
 - **Repro** : signup avec un email frais
 - **Attendu** : mail de bienvenue Geoperf-brandé (palette Tech crisp, sender `hello@geoperf.com`)

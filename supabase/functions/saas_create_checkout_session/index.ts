@@ -107,9 +107,16 @@ Deno.serve(async (req) => {
   }
 
   // Crée la session checkout
+  // Note `customer_update.address: "auto"` requis quand `automatic_tax` est on
+  // et que le customer n'a pas d'adresse pré-remplie : Stripe utilise l'adresse
+  // de facturation saisie au checkout et la persiste sur le customer pour les
+  // factures futures (sinon erreur "Automatic tax calculation requires a valid
+  // address on the Customer").
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customerId,
+    customer_update: { address: "auto", name: "auto" },
+    billing_address_collection: "required",
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${APP_URL}/app/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${APP_URL}/app/billing?canceled=true`,
