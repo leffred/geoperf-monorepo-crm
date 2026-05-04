@@ -164,6 +164,26 @@
 - **Root cause** : L'endpoint webhook test mode était configuré sans `customer.subscription.created` (et possiblement d'autres). Stripe n'émettait donc jamais cet event vers Supabase, et la sub n'était jamais créée en DB.
 - **Fix** : Fred a ajouté les 5 events nécessaires : `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
 
+### 🚨 P0 (suite) — Bugs découverts en tests E2E avancés
+
+#### 🐛 BUG #2.8 — Multi-billing : checkout ne cancel pas les anciennes subs Stripe
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `supabase/functions/saas_create_checkout_session/index.ts`
+- **Root cause** : Quand un user upgrade Starter → Pro, Stripe créait une nouvelle subscription sans cancel l'ancienne. Stripe ne fait pas le cancel automatique. Résultat : 2 subs actives Stripe simultanément, l'user payait 2× (testé : 1× starter 79€ + 2× pro 399€ = 877€/mois pour un user au lieu de 399€).
+- **Fix** : avant `stripe.checkout.sessions.create`, list toutes les subs du customer puis cancel celles en status `active|trialing|past_due|incomplete`. Trade-off accepté : si l'user abandonne le checkout après ce cancel, il perd son ancien plan. Acceptable, priorité = zéro double-billing. À raffiner avec Stripe Customer Portal en S17.
+
+#### 🐛 BUG #2.9 — Read silencieux fallback à free quand multi-rows actives
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `landing/lib/saas-auth.ts` ligne ~131
+- **Root cause** : `.eq("user_id", x).in("status", ["active","trialing"]).maybeSingle()` retourne null quand >1 row matche (au lieu d'erreur). Combiné au `?? "free"` ligne 137, l'user payait Pro mais voyait son interface en Free pendant les états transients.
+- **Fix** : ajout de `.order("created_at", desc).limit(1)` avant `.maybeSingle()` pour toujours retourner la sub la plus récente.
+
+#### 🐛 BUG #2.10 — TVA non calculée sur prices yearly (tax_behavior unspecified)
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : Stripe prices côté compte test
+- **Root cause** : Les 8 prices créés via MCP `create_price` n'avaient pas `tax_behavior` explicite (default unspecified). Stripe Tax appliquait des comportements différents selon le contexte → TVA OK sur monthly, absente sur annual.
+- **Fix** : recréation des 8 prices avec `tax_behavior=exclusive` (HT, TVA s'ajoute) via `stripe_api_execute`. Update des 8 env vars Supabase. Décision business : garder unit_amounts (79/199/399/799€) en HT → revenu net +20%, prix client final 94.80€/238.80€/478.80€/958.80€ TTC.
+
 ---
 
 ## Round 2 → 3 — (à venir)
