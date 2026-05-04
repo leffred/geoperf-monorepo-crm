@@ -136,6 +136,21 @@ Deno.serve(async (req) => {
         const sub = event.data.object as Stripe.Subscription;
         const userId = await findUserIdByCustomer(sub.customer as string);
         if (!userId) throw new Error(`No user found for customer ${sub.customer}`);
+
+        // S16.2 fix : avant UPSERT, déclasser les anciennes subs free actives du user.
+        // Sinon le UNIQUE INDEX partial `(user_id) WHERE status='active'` rejette
+        // la nouvelle sub payante quand elle passe à active (event subscription.updated),
+        // → webhook throws 500, sub bloquée à 'incomplete'.
+        const newStatus = mapStripeStatus(sub.status);
+        if (newStatus === "active" || newStatus === "trialing" || newStatus === "past_due") {
+          await supabase
+            .from("saas_subscriptions")
+            .update({ status: "canceled", updated_at: new Date().toISOString() })
+            .eq("user_id", userId)
+            .eq("tier", "free")
+            .eq("status", "active");
+        }
+
         await upsertSubscription(sub, userId);
 
         // S16 (CRITICAL #5) : free fallback safety net.

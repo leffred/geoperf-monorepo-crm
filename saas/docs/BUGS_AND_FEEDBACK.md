@@ -114,7 +114,59 @@
 
 ---
 
-## Round 2 — (à venir)
+## Round 2 — Tests E2E Stripe checkout — 2026-05-04
+
+**Source** : tests E2E pré-launch lancés post-S16.1 sur compte test mode Stripe.
+
+### 🚨 P0 — Bugs critiques résolus en hotfix S16.2
+
+#### 🐛 BUG #2.1 — Mismatch contrat client/Edge Function checkout
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `landing/app/app/billing/actions.ts` ↔ `supabase/functions/saas_create_checkout_session/index.ts`
+- **Root cause** : Le client envoyait `cycle` et `trial_period_days`, l'Edge Function destructurait `billing_cycle` et `trial`. Defaults de l'Edge Function (`monthly`, `false`) masquaient le bug → toggle annual silencieusement cassé, trial Pro 14j jamais activé.
+- **Fix** : aligner le contrat côté client.
+
+#### 🐛 BUG #2.2 — Edge Function rejette Stripe webhook (UNAUTHORIZED_NO_AUTH_HEADER)
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `supabase/functions/saas_stripe_webhook`
+- **Root cause** : Par défaut, le gateway Supabase Edge Functions exige `Authorization: Bearer <JWT>` sur toutes les requêtes. Stripe envoie `stripe-signature`, pas un JWT. Tous les events étaient rejetés en 401 avant même d'atteindre le code.
+- **Fix** : redéployer avec `--no-verify-jwt`. À pérenniser dans `supabase/config.toml`.
+
+#### 🐛 BUG #2.3 — Enum `saas_subscription_status` sans valeur `trialing`
+- **Statut** : ✅ Fixed (S16.2 migration phase 9, 2026-05-04)
+- **Page** : DB schema + `saas_stripe_webhook/index.ts`
+- **Root cause** : S16 §4.4 a modifié `mapStripeStatus()` pour préserver `trialing`, mais la migration SQL pour ajouter la valeur à l'enum n'a pas été faite. Tout user sur trial Pro 14j aurait bloqué le webhook avec erreur "invalid input value for enum".
+- **Fix** : migration `20260504_saas_phase9_trialing_enum.sql` ajoute la valeur à l'enum.
+
+#### 🐛 BUG #2.4 — Webhook ne dégage pas la sub free lors d'un upgrade
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `supabase/functions/saas_stripe_webhook/index.ts` case `customer.subscription.created/updated`
+- **Root cause** : Quand un user free upgrade vers payant, l'UPSERT de la nouvelle sub à `status='active'` était rejeté par le UNIQUE INDEX partial `(user_id) WHERE status='active'` (la free row était encore active). Webhook plantait silencieusement, sub bloquée à `incomplete`.
+- **Fix** : avant l'UPSERT, déclasser les `tier='free' AND status='active'` du même user à `canceled`.
+- **Validation E2E** : compte `flefebvre+8@jourdechance.com` 2026-05-04 → free déclassée + starter active automatiquement, zéro intervention SQL.
+
+### 🔴 P1 — Bugs résolus avec config externe
+
+#### 🐛 BUG #2.5 — Stripe live/test mode mismatch
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Root cause** : `STRIPE_SECRET_KEY` côté Supabase était en mode TEST, mais les `STRIPE_PRICE_*` pointaient vers des price IDs créés en mode LIVE (héritage S7+S16). Erreur Stripe : "No such price ... a similar object exists in live mode".
+- **Fix** : reset des `stripe_customer_id` pour les 3 profils avec values live + recréation des 4 products + 8 prices en TEST mode + update des 8 env vars + nouveau webhook secret + reconfig MCP Stripe en TEST.
+
+#### 🐛 BUG #2.6 — Stripe Tax sans address sur customer fresh
+- **Statut** : ✅ Fixed (S16.2, 2026-05-04)
+- **Page** : `saas_create_checkout_session/index.ts`
+- **Root cause** : `automatic_tax: { enabled: true }` requiert que le customer ait une address de facturation, ou que la session collecte l'adresse. Customer fresh créé en mode test → pas d'adresse → Stripe rejette avec "Automatic tax calculation requires a valid address".
+- **Fix** : ajout de `customer_update: { address: "auto", name: "auto" }` + `billing_address_collection: "required"` dans `stripe.checkout.sessions.create`.
+
+#### 🐛 BUG #2.7 — Webhook Stripe sans tous les events nécessaires
+- **Statut** : ✅ Fixed (S16.2 config Fred, 2026-05-04)
+- **Page** : Stripe Dashboard test → Webhooks → endpoint events
+- **Root cause** : L'endpoint webhook test mode était configuré sans `customer.subscription.created` (et possiblement d'autres). Stripe n'émettait donc jamais cet event vers Supabase, et la sub n'était jamais créée en DB.
+- **Fix** : Fred a ajouté les 5 events nécessaires : `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+
+---
+
+## Round 2 → 3 — (à venir)
 
 > Quand tu refais une session de tests, ajoute un nouveau header `## Round 2 — Test Fred — YYYY-MM-DD` ici et reproduit la structure. Numérotation : `#2.1`, `#2.2`, etc.
 
