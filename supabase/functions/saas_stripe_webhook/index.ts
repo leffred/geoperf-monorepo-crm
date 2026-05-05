@@ -137,6 +137,47 @@ Deno.serve(async (req) => {
         const userId = await findUserIdByCustomer(sub.customer as string);
         if (!userId) throw new Error(`No user found for customer ${sub.customer}`);
 
+        // S20 §4.1 : si la sub est issue d'un coupon, incrementer used_count + lier redemption.
+        // On ne fait l'increment qu'une seule fois (sur subscription.created), pas sur updates.
+        if (event.type === "customer.subscription.created") {
+          const couponCode = sub.metadata?.coupon_code;
+          if (couponCode) {
+            // Idempotency : update redemption seulement si stripe_subscription_id NULL
+            const { data: redemption, error: redempErr } = await supabase
+              .from("saas_coupon_redemptions")
+              .update({ stripe_subscription_id: sub.id })
+              .eq("coupon_code", couponCode)
+              .eq("user_id", userId)
+              .is("stripe_subscription_id", null)
+              .select("id")
+              .maybeSingle();
+
+            if (!redempErr && redemption) {
+              // Increment used_count seulement si on a effectivement update une redemption (1ere fois)
+              await supabase.rpc("saas_increment_coupon_usage", { p_code: couponCode }).then(
+                ({ error: rpcErr }) => {
+                  if (rpcErr) {
+                    // Fallback : direct UPDATE si la fonction n existe pas
+                    supabase
+                      .from("saas_coupons")
+                      .select("used_count")
+                      .eq("code", couponCode)
+                      .single()
+                      .then(({ data: c }) => {
+                        if (c) {
+                          supabase
+                            .from("saas_coupons")
+                            .update({ used_count: (c.used_count ?? 0) + 1 })
+                            .eq("code", couponCode);
+                        }
+                      });
+                  }
+                }
+              );
+            }
+          }
+        }
+
         // S16.2 fix : avant UPSERT, déclasser les anciennes subs free actives du user.
         // Sinon le UNIQUE INDEX partial `(user_id) WHERE status='active'` rejette
         // la nouvelle sub payante quand elle passe à active (event subscription.updated),

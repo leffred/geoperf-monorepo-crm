@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return new Response("Unauthorized", { status: 401 });
 
-  const { tier, billing_cycle = "monthly", trial = false } = await req.json().catch(() => ({}));
+  const { tier, billing_cycle = "monthly", trial = false, coupon_code } = await req.json().catch(() => ({}));
   if (billing_cycle !== "monthly" && billing_cycle !== "annual") {
     return new Response(JSON.stringify({ error: "Invalid billing_cycle (must be 'monthly' or 'annual')" }), {
       status: 400, headers: { "content-type": "application/json" },
@@ -78,7 +78,68 @@ Deno.serve(async (req) => {
   }
 
   // Trial 14 jours réservé au tier Pro (S13)
-  const trialDays = (trial === true && tier === "pro") ? 14 : undefined;
+  let trialDays: number | undefined = (trial === true && tier === "pro") ? 14 : undefined;
+
+  // S20 §4.1 : coupon — validate + override trial_days. Insert redemption row.
+  let couponNormalized: string | null = null;
+  if (coupon_code) {
+    couponNormalized = String(coupon_code).trim().toUpperCase();
+    const adminClientForCoupon = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      { auth: { persistSession: false } }
+    );
+    const { data: coupon, error: couponErr } = await adminClientForCoupon
+      .from("saas_coupons")
+      .select("code, tier_target, trial_days, max_uses, used_count, expires_at, is_active")
+      .eq("code", couponNormalized)
+      .maybeSingle();
+    if (couponErr || !coupon) {
+      return new Response(JSON.stringify({ error: "coupon_not_found" }), {
+        status: 422, headers: { "content-type": "application/json" },
+      });
+    }
+    if (!coupon.is_active) {
+      return new Response(JSON.stringify({ error: "coupon_disabled" }), {
+        status: 422, headers: { "content-type": "application/json" },
+      });
+    }
+    if (coupon.expires_at && new Date(coupon.expires_at) <= new Date()) {
+      return new Response(JSON.stringify({ error: "coupon_expired" }), {
+        status: 422, headers: { "content-type": "application/json" },
+      });
+    }
+    if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) {
+      return new Response(JSON.stringify({ error: "coupon_exhausted" }), {
+        status: 422, headers: { "content-type": "application/json" },
+      });
+    }
+    if (coupon.tier_target !== tier && coupon.tier_target !== "solo") {
+      return new Response(JSON.stringify({ error: "coupon_wrong_tier", tier_target: coupon.tier_target }), {
+        status: 422, headers: { "content-type": "application/json" },
+      });
+    }
+    // Override trial_days fournis par le coupon (fallback 14j si NULL)
+    trialDays = (coupon.trial_days ?? 14) || 14;
+
+    // Idempotence : insert redemption avant Stripe (UNIQUE (coupon_code, user_id) protect double)
+    const { error: redempErr } = await adminClientForCoupon
+      .from("saas_coupon_redemptions")
+      .insert({ coupon_code: coupon.code, user_id: user.id, email: user.email ?? "" });
+    if (redempErr) {
+      // Detection unique_violation 23505 → already_redeemed
+      const code = (redempErr as unknown as { code?: string }).code;
+      if (code === "23505") {
+        return new Response(JSON.stringify({ error: "coupon_already_redeemed_by_user" }), {
+          status: 409, headers: { "content-type": "application/json" },
+        });
+      }
+      console.error("[checkout] redemption insert err:", redempErr.message);
+      return new Response(JSON.stringify({ error: `redemption_insert_failed: ${redempErr.message}` }), {
+        status: 500, headers: { "content-type": "application/json" },
+      });
+    }
+  }
 
   // Récupère ou crée le Stripe customer pour ce user
   const adminClient = createClient(
@@ -149,9 +210,15 @@ Deno.serve(async (req) => {
     success_url: `${APP_URL}/app/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${APP_URL}/app/billing?canceled=true`,
     automatic_tax: { enabled: true },
-    metadata: { user_id: user.id, tier, billing_cycle, trial: String(!!trialDays) },
+    metadata: {
+      user_id: user.id, tier, billing_cycle, trial: String(!!trialDays),
+      ...(couponNormalized ? { coupon_code: couponNormalized } : {}),
+    },
     subscription_data: {
-      metadata: { user_id: user.id, tier, billing_cycle },
+      metadata: {
+        user_id: user.id, tier, billing_cycle,
+        ...(couponNormalized ? { coupon_code: couponNormalized } : {}),
+      },
       ...(trialDays ? { trial_period_days: trialDays } : {}),
     },
   });

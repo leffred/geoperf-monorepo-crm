@@ -73,7 +73,7 @@
     {
       "parameters": {
         "model": "anthropic/claude-haiku-4.5",
-        "options": {"temperature": 0.4, "maxTokens": 8000}
+        "options": {"temperature": 0.4, "maxTokens": 16000}
       },
       "id": "n_synthesis_model",
       "name": "Model (Haiku 4.5 default)",
