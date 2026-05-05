@@ -205,7 +205,136 @@
 
 ---
 
-## Round 2 → 3 — (à venir)
+### 🟡 P3 — Dette tech Sentry (S18 ou hotfix court)
+
+#### ✨ FEEDBACK #2.12 — Sentry global-error.js manquant
+- **Statut** : 🆕 Open — sprint cible S18
+- **Source** : warning au `npm run build` post-S17.
+- **Impact** : ~5% des erreurs (crashs render React) ne sont pas capturées par Sentry.
+- **Fix** : créer `landing/app/global-error.tsx` avec Sentry handler. 10 min. Doc : https://docs.sentry.io/platforms/javascript/guides/nextjs/manual-setup/#react-render-errors-in-app-router
+
+#### ✨ FEEDBACK #2.13 — Sentry deprecation `sentry.client.config.ts`
+- **Statut** : 🆕 Open — sprint cible S18 ou plus tard
+- **Source** : DEPRECATION warning au `npm run build` post-S17.
+- **Impact** : marchera encore 6-12 mois. Quand Next.js basculera sur Turbopack par défaut, le file sera ignoré.
+- **Fix** : renommer `sentry.client.config.ts` → `instrumentation-client.ts` ou déplacer son contenu dans `instrumentation.ts`. 5 min.
+
+---
+
+## Round 3 — Tests E2E Apollo Sequence A — 2026-05-04
+
+**Source** : tests E2E acquisition pré-launch (post-S17, mailbox Apollo connectée, contact test enrollé).
+
+### 🚨 P0 — Bugs critiques résolus
+
+#### 🐛 BUG #3.1 — SPF Resend obsolète (`_spf.resend.com` → `send.resend.com`)
+- **Statut** : ✅ Fixed (S17 hotfix DNS, 2026-05-04)
+- **Source** : Mail-tester reportait `permerror` sur le SPF chain. `_spf.resend.com` n'existe plus côté Resend (changement non documenté).
+- **Impact** : SPF en `permerror` = MTA récepteurs (Gmail, Outlook) marquent les emails geoperf.com comme suspects → spam à 50%+, voire reject.
+- **Fix** : OVH → Zone DNS geoperf.com → record TXT racine SPF : `_spf.resend.com` → `send.resend.com`. Score mail-tester passé de ~5/10 à 10/10.
+- **Leçon** : tester systématiquement le SPF chain via mail-tester ou `dig` après toute config DNS sender. Resend a probablement changé son convention sans deprecation visible.
+
+#### 🐛 BUG #3.2 — Workflow Phase 2 sourcing ramène des CMO mondiaux (pas FR)
+- **Statut** : ✅ Fixed (S17, 2026-05-04)
+- **Page** : `n8n/workflows/geoperf_phase2_sourcing.json` node "Build Apollo searches"
+- **Root cause** : payload Apollo `mixed_people/api_search` ne spécifiait pas `person_locations`. Apollo ramenait tous les CMO mondiaux des companies sourced (BlackRock US, Vanguard US, etc.), faisant péter le critère langue de la Sequence FR1.
+- **Diagnostic** : sur 19 prospects AM "éligibles", 14 US + 2 Suisse (anglophones) + 3 "France" dont seulement 1 probablement bilingue FR. Si on lance la Sequence FR sur ces 19, on brûle 18 leads anglophones.
+- **Fix** : 2 patches dans le workflow Phase 2 sourcing :
+  1. Node "Build Apollo searches" : ajout `person_locations: ["France", "Belgium", "Luxembourg", "Switzerland", "Monaco"]` dans `apollo_payload`.
+  2. Node "Score & filter" : ajout malus -30 sur les titles regex `\b(americas?|north america|usa|emea director|global head|dach|nordic|asia|apac|chief of staff to the global)\b` (sécurité supplémentaire).
+- **Action complémentaire DB** : 24 prospects non-FR existants passés à `status='disqualified'` avec `metadata.disqualified_reason='non_french_speaking'` (réactivables si on lance Sequence EN un jour).
+
+### 🔴 P1 — Workflows découverts
+
+#### 🐛 BUG #3.3 — Custom fields Apollo non poussés via workflow Phase 2.2
+- **Statut** : ✅ Fixed (S17, 2026-05-04)
+- **Page** : `n8n/workflows/geoperf_phase2_2_sequence_load.json` node "Build Apollo payload"
+- **Root cause** : le node Build Apollo payload ne poussait pas les `typed_custom_fields` au moment de la création du contact Apollo. Conséquence : les variables `{{ranking_position}}`, `{{visibility_score}}`, etc. partaient en placeholder littéral dans les emails.
+- **Fix** : 4 custom fields créés manuellement dans Apollo UI (Settings → Custom Fields), IDs récupérés via MCP `apollo_contacts_search` sur un contact test, snippet JS du node mis à jour pour inclure `typed_custom_fields: { [CF.ranking_position]: p.rank, ... }` au format dict (Apollo accepte `{<field_id>: value}`).
+- **Mapping IDs Apollo** :
+  - `ranking_position` → `69f893ced0779e000de94b4c`
+  - `visibility_score` → `69f89400d0779e000de94dcd`
+  - `landing_url` → `69f8941c017040001faff3c5`
+  - `competitor_top1` → `69f8942e02bc0300151d8fb2`
+
+### 🟠 P2 — Conventions Apollo découvertes
+
+#### 💡 FEEDBACK #3.4 — Apollo "Send Test" envoie au USER, pas au CONTACT
+- **Statut** : ✅ Documented (S17, 2026-05-04)
+- **Comportement** : le bouton "Send Test" Apollo envoie systématiquement à l'utilisateur Apollo logué (créateur de la Sequence), pas au contact destinataire. C'est by design pour validation visuelle sans envoi réel.
+- **Conséquence** : pour vraiment tester la deliverability vers un email externe, il faut **enroller** le contact dans la sequence (l'email part pour de vrai vers son inbox dans le wait_time de step 1).
+- **Apollo UI quirk** : la syntaxe des custom fields dans les copies est `{{ranking_position}}` (juste le nom du field), pas `{{contact.custom_fields.ranking_position}}` ni `{{custom_fields.ranking_position}}`. Découvert par essai-erreur.
+
+#### 💡 FEEDBACK #3.5 — Apollo "events Stripe webhook" — 5 events obligatoires
+- **Statut** : ✅ Documented (S17, 2026-05-04)
+- **Source** : tests payment_failed S16.2 ont révélé 401 silencieux du webhook saas_stripe_webhook quand le verify_jwt n'était pas désactivé.
+- **Convention pérenne** : tous les webhooks tiers (Stripe, Calendly, Apollo callbacks) doivent être déployés avec `--no-verify-jwt`. À pérenniser dans `supabase/config.toml`.
+- **Liste des events Stripe à cocher dans webhook Apollo Dashboard** : `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_failed`.
+
+### 🟡 P3 — Idées long terme
+
+#### ✨ IDÉE #3.6 — Sequence A version EN pour les leads anglophones
+- **Statut** : 🆕 Open — sprint cible S18
+- **Contexte** : 24 prospects ont été disqualifiés en S17 pour cause d'anglophonie. Pour les réactiver, il faut une Sequence EN parallèle.
+- **Implémentation** :
+  1. Dupliquer FR1 dans Apollo → traduire en EN → "EN1"
+  2. Ajouter une colonne `language` ou `locale` à `prospects` (inferable du country + LinkedIn locale)
+  3. Modifier le webhook Phase 2.2 pour router selon la langue : `if locale='fr' → FR1, else → EN1`
+- **Réactivation des disqualified** : `UPDATE prospects SET status='new' WHERE metadata->>'disqualified_reason' = 'non_french_speaking';`
+
+#### ✨ IDÉE #3.7 — Warmup mailbox obligatoire pour nouveau domaine
+- **Statut** : ✅ En cours (Apollo Inbox Warmup activé 2026-05-04)
+- **Contexte** : malgré DNS parfait (mail-tester 10/10), le mail test post-S17 est arrivé en spam Gmail à cause de la réputation neuve du domaine geoperf.com.
+- **Process** : Apollo Inbox Warmup envoie automatiquement des emails simulés entre mailboxes Apollo pour bâtir la réputation. Durée : 7-14 jours pour atteindre 85%+ inbox placement.
+- **Pré-launch checklist** : avant tout vrai batch, vérifier dans Apollo Settings → Mailboxes le score "Inbox Placement". Lancer batch progressif : 5/jour J+10, 10/jour J+15, 20/jour J+20.
+
+---
+
+## Round 4 — Bugs Phase 2 sourcing — 2026-05-04 soir
+
+**Source** : Fred a lancé une nouvelle étude "Transformation digitale" et constaté 0 prospects sourcés via webhook Phase 2.
+
+### 🚨 P0 — Bugs critiques résolus
+
+#### 🐛 BUG #4.1 — Phase 1 LLM hallucine descriptions au lieu de domains
+- **Statut** : 🟠 Open (S18) — workaround appliqué (cleanup SQL)
+- **Symptôme** : sur le report Transformation digitale, **20 rows sur 36** ont leur colonne `domain` qui contient une description (ex: `"conseil en stratégie et technologie..."` au lieu de `"accenture.com"`).
+- **Root cause** : le LLM (probablement Claude/GPT) du workflow Phase 1 a confondu "domain" avec "core business" sur certaines lignes. Le prompt n'est pas assez strict sur le format attendu.
+- **Workaround** : DELETE des rows polluées via `c.domain !~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z]{2,})+$'`.
+- **Fix S18** : renforcer le prompt Phase 1 pour exiger un domain regex-validé, ou ajouter une étape de validation côté workflow avant l'INSERT.
+
+#### 🐛 BUG #4.2 — Node "Apollo people search" cassé (URL/body manquants)
+- **Statut** : ✅ Fixed (2026-05-04, n8n cloud)
+- **Page** : workflow `c85c3pPFq85Iy6O2` node "Apollo people search"
+- **Symptôme** : le node avait `url: "={{ $json.apollo_url }}"` (référence inexistante) et **pas de sendBody/jsonBody**. Aucun call API valide → 0 prospects.
+- **Root cause** : régression silencieuse à un moment dans l'historique du workflow (probablement édit manuel n8n ou import JSON foireux).
+- **Fix** : restaurer `url: "https://api.apollo.io/api/v1/mixed_people/api_search"` + `sendBody: true` + `jsonBody: "={{ JSON.stringify($json.apollo_payload) }}"`.
+
+#### 🐛 BUG #4.3 — Apollo API param `q_organization_domains` → `q_organization_domains_list`
+- **Statut** : ✅ Fixed (2026-05-04, n8n cloud)
+- **Page** : workflow `c85c3pPFq85Iy6O2` node "Build Apollo searches"
+- **Root cause** : Apollo a renommé le param API de `q_organization_domains` (ancien) à `q_organization_domains_list` (avec `_list`). L'ancien nom retourne 0 résultats silencieusement (Apollo l'ignore probablement).
+- **Fix** : remplacer dans le `apollo_payload` du node JS : `q_organization_domains` → `q_organization_domains_list`.
+
+#### 🐛 BUG #4.4 — `person_departments` n'existe pas dans l'API Apollo officielle
+- **Statut** : ✅ Fixed (2026-05-04, n8n cloud)
+- **Page** : workflow `c85c3pPFq85Iy6O2` node "Build Apollo searches"
+- **Root cause** : le payload contenait `person_departments: ['marketing', 'c_suite']` mais ce paramètre n'est pas documenté côté Apollo officiel. Apollo le rejetait → 0 résultats. Confirmé via test MCP : retirer ce param fait passer le call de 0 à 17 prospects pour Microsoft.
+- **Fix** : supprimer la ligne `person_departments: ...` du payload.
+
+### 🟢 Validation finale Round 4
+
+Test post-fixes (2026-05-04, report Transformation digitale, max_per_company=3, lead_score_min=30) :
+- **37 prospects** sourcés sur 16 companies (Apollo dispo)
+- **33 emails verified** (89%)
+- **6 prospects éligibles Sequence A** (lead_score >= 50) répartis : Microsoft (2), Deloitte Digital (2), IBM (1), SAP (1)
+- **0 prospects** US/UK/Asie (filtre `person_locations: France/BE/CH/LU/MC` opérationnel)
+
+Pipeline acquisition entièrement fonctionnel. Reste le warmup mailbox (5-10 jours) avant 1er envoi réel.
+
+---
+
+## Round 4 → 5 — (à venir)
 
 > Quand tu refais une session de tests, ajoute un nouveau header `## Round 2 — Test Fred — YYYY-MM-DD` ici et reproduit la structure. Numérotation : `#2.1`, `#2.2`, etc.
 
