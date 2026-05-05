@@ -31,8 +31,12 @@ interface ReportRow {
   sous_categorie: string;
   slug_public: string | null;
   pdf_url: string | null;
+  pdf_path: string | null;
   status: string;
 }
+
+const PDF_BUCKET = "white-papers";
+const PDF_SIGNED_URL_TTL_S = 7 * 24 * 3600; // 7 jours, regen a chaque envoi
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -139,13 +143,13 @@ Deno.serve(async (req) => {
   try {
     const { data: report, error: reportErr } = await supabase
       .from("reports")
-      .select("id, sous_categorie, slug_public, pdf_url, status")
+      .select("id, sous_categorie, slug_public, pdf_url, pdf_path, status")
       .eq("id", body.report_id)
       .maybeSingle();
     if (reportErr || !report) {
       return new Response(JSON.stringify({ error: `report not found: ${reportErr?.message ?? "no row"}` }), { status: 404 });
     }
-    if (report.status !== "ready" || !report.pdf_url) {
+    if (report.status !== "ready" || (!report.pdf_url && !report.pdf_path)) {
       return new Response(JSON.stringify({ error: `report not ready (status=${report.status})` }), { status: 409 });
     }
 
@@ -156,6 +160,24 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Generation fresh signed URL a chaque envoi (le pdf_url stocke en DB peut etre stale).
+    // Fallback : si pdf_path absent (legacy), utilise pdf_url stocke (peut etre expire).
+    let pdfUrl: string;
+    const pdfPath = report.pdf_path ?? `${report.id}.pdf`;
+    const { data: signed, error: signErr } = await supabase
+      .storage
+      .from(PDF_BUCKET)
+      .createSignedUrl(pdfPath, PDF_SIGNED_URL_TTL_S);
+    if (signErr || !signed?.signedUrl) {
+      console.error(`[saas_send_lead_magnet_email] createSignedUrl failed for ${pdfPath}: ${signErr?.message ?? "no url"}`);
+      if (!report.pdf_url) {
+        return new Response(JSON.stringify({ error: `failed to generate signed URL: ${signErr?.message ?? "unknown"}` }), { status: 500 });
+      }
+      pdfUrl = report.pdf_url; // legacy fallback
+    } else {
+      pdfUrl = signed.signedUrl;
+    }
+
     // Unsubscribe URL : pour le moment lien vers /privacy. Pas d'opt-out automatise
     // sur lead_magnet_downloads car table sans user — la resiliation passe par
     // reponse a hello@geoperf.com (RGPD doc dans /privacy).
@@ -164,7 +186,7 @@ Deno.serve(async (req) => {
     const { subject, html, text } = renderEmail({
       email,
       report: report as ReportRow,
-      pdfUrl: report.pdf_url!,
+      pdfUrl,
       unsubUrl,
     });
 

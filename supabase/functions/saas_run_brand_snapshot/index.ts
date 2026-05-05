@@ -28,12 +28,12 @@ type Tier = "free" | "starter" | "growth" | "pro" | "agency" | "solo";
 
 const LLMS_BY_TIER: Record<Tier, string[]> = {
   free:    ["openai/gpt-4o"],
-  starter: ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-pro", "perplexity/sonar-pro"],
-  growth:  ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-pro", "perplexity/sonar-pro"],
-  pro:     ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-pro", "perplexity/sonar-pro", "mistralai/mistral-large", "x-ai/grok-2"],
-  agency:  ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-pro", "perplexity/sonar-pro", "mistralai/mistral-large", "x-ai/grok-2", "meta-llama/llama-3.3-70b-instruct"],
+  starter: ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash", "perplexity/sonar-pro"],
+  growth:  ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash", "perplexity/sonar-pro"],
+  pro:     ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash", "perplexity/sonar-pro", "mistralai/mistral-large", "x-ai/grok-2"],
+  agency:  ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash", "perplexity/sonar-pro", "mistralai/mistral-large", "x-ai/grok-2", "meta-llama/llama-3.3-70b-instruct"],
   // Legacy
-  solo:    ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-pro", "perplexity/sonar-pro"],
+  solo:    ["openai/gpt-4o", "anthropic/claude-sonnet-4-6", "google/gemini-2.5-flash", "perplexity/sonar-pro"],
 };
 
 // Limit nb prompts par tier (S7 grille pricing)
@@ -191,6 +191,13 @@ async function callLLM(model: string, system: string, user: string): Promise<{ t
       max_tokens: 1500,
       temperature: 0.3,
       usage: { include: true },
+      // S20 fix : Gemini 2.5 Pro/Flash via OpenRouter consomme un budget "thinking"
+      // qui compte dans max_tokens mais n'est PAS retourné dans message.content.
+      // Sans cette ligne, Gemini renvoie systematiquement content="" (budget 1500
+      // entierement consomme par le reasoning silencieux). reasoning.exclude=true
+      // desactive le thinking pour les modeles qui le supportent et est ignore
+      // par les autres modeles (no-op safe sur GPT-4o, Claude, Perplexity, etc.).
+      reasoning: { exclude: true },
     }),
   });
   const latency_ms = Date.now() - t0;
